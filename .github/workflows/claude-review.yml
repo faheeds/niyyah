@@ -2,7 +2,7 @@ name: Claude review & auto-merge
 
 # Runs Claude Code as an automated reviewer on every PR against main.
 # If the review is clean, Claude approves the PR and turns on GitHub's
-# native auto-merge â€” which only completes once the required "CI / build"
+# native auto-merge — which only completes once the required "CI / build"
 # status check has also passed. If Claude finds a blocking issue, it
 # requests changes and nothing merges. See CLAUDE.md for the review policy
 # this follows, and README-CLAUDE-GITHUB-SETUP.md for the branch
@@ -38,13 +38,13 @@ jobs:
           # No github_token here on purpose: leaving it unset means this
           # action authenticates as the Claude GitHub App instead of the
           # default GITHUB_TOKEN. That matters if Claude ever pushes a
-          # fixup commit â€” commits made with the default GITHUB_TOKEN don't
+          # fixup commit — commits made with the default GITHUB_TOKEN don't
           # re-trigger this workflow or CI, which would silently strand the
           # PR under an auto-merge that never sees a fresh check run.
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} in
             ${{ github.repository }} against the conventions in CLAUDE.md at
-            the root of this repository. Read CLAUDE.md first â€” it defines
+            the root of this repository. Read CLAUDE.md first — it defines
             what this review should focus on, in priority order, including
             the non-negotiable schema-drift rule (every new table/column a
             PR queries must also be created in the same PR).
@@ -53,7 +53,7 @@ jobs:
             1. Run `gh pr view ${{ github.event.pull_request.number }} --json title,body,headRefName` and
                `gh pr diff ${{ github.event.pull_request.number }}` to read the change.
             2. Run `gh pr checks ${{ github.event.pull_request.number }}` to see whether CI has
-               already failed. If it has, request changes citing the failure â€” don't
+               already failed. If it has, request changes citing the failure — don't
                spend the review pretending the build is fine.
             3. Evaluate the diff against CLAUDE.md's review priorities.
             4. If there is a blocking issue (schema drift, a new untrusted auth
@@ -66,9 +66,9 @@ jobs:
                `--auto` only completes the merge once the required CI check also
                passes, so it's safe to run even if CI is still running.
             6. If the PR touches a backlog item with an unmet P0 dependency (see
-               CLAUDE.md's sequencing section), don't block on that alone â€” note
+               CLAUDE.md's sequencing section), don't block on that alone — note
                it in your review body so a human sees the flag, but still approve
                and auto-merge if the code itself is sound.
           claude_args: |
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr review:*),Bash(gh pr merge:*)"
-            --max-turns 30
+            --max-turns 60
