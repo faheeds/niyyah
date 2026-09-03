@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788069600000,
+      "tag": "0000_create_community_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788073200000,
+      "tag": "0001_add_profiles_progress_and_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788076800000,
+      "tag": "0002_add_organizer_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788080400000,
+      "tag": "0003_add_volunteer_applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788084000000,
+      "tag": "0004_add_event_participations",
+      "breakpoints": true
+    }
+  ]
+}

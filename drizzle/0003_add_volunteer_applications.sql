@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS volunteer_opportunities (event_id TEXT PRIMARY KEY NOT NULL,compensation_type TEXT NOT NULL DEFAULT 'unpaid',pay_details TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS volunteer_applications (id TEXT PRIMARY KEY NOT NULL,event_id TEXT NOT NULL,organization_id TEXT NOT NULL,user_id TEXT NOT NULL,applicant_email TEXT NOT NULL,applicant_name TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(event_id,user_id));
+CREATE INDEX IF NOT EXISTS idx_applications_org_status ON volunteer_applications(organization_id,status,created_at);

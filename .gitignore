@@ -1,0 +1,8 @@
+node_modules/
+dist/
+work/
+.vinext/
+.next/
+.wrangler/
+.env*
+!.env.example
