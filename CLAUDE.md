@@ -55,4 +55,7 @@ Keep review comments specific and actionable — reference the exact file/line, 
 
 ## Deployment
 
-Staging/production deployment sequencing is documented separately once the deployment target for this repo is finalized (see the open item in the project's setup notes) — do not assume `wrangler deploy` or any specific CD workflow is wired up until a `.github/workflows/deploy*.yml` exists in this repo.
+- Every merge to `main` auto-deploys to the `niyyah-community-staging` Cloudflare Worker via `.github/workflows/deploy-staging.yml`.
+- Production (`niyyah-community`) only deploys when someone manually triggers `.github/workflows/deploy-production.yml` from the Actions tab — never automatically, and never as part of the review/merge flow.
+- Both workflows run `pnpm build`, then `scripts/patch-wrangler-config.mjs` to inject the real Worker name and D1 database id (build output otherwise contains a placeholder database id), then `wrangler deploy`. See `README-CLAUDE-GITHUB-SETUP.md` for the one-time Cloudflare account setup this depends on.
+- The D1 schema self-creates on first request (`prepare*Table*` functions in `db/index.js`) — a deploy doesn't need a separate migration-apply step for the app to function. `drizzle/` is schema history/reference, not an applied migration pipeline.

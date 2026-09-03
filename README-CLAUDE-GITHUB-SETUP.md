@@ -44,7 +44,35 @@ Open a small test PR (e.g. a comment or whitespace tweak) against `main` and con
 - The `CI / build` check runs and passes.
 - The `Claude review & auto-merge` workflow runs, and either leaves an approving review + turns on auto-merge (PR should show "Auto-merge enabled" and merge itself within a minute or two of CI finishing), or requests changes with a specific comment.
 
+## 5. Cloudflare deployment (staging auto-deploy, manual production)
+
+The app currently runs `pnpm build` and deploys via the OpenAI Sites hosting referenced in `.openai/hosting.json` — a separate platform, not something `wrangler deploy` from GitHub Actions can drive. To deploy this repo to Cloudflare Workers yourself instead:
+
+1. **Create two D1 databases** in your own Cloudflare account — one for staging, one for production:
+   ```bash
+   npx wrangler login
+   npx wrangler d1 create niyyah-community-staging
+   npx wrangler d1 create niyyah-community-production
+   ```
+   Each command prints a `database_id` — save both.
+2. **Create a Cloudflare API token** (My Profile → API Tokens → Create Token) scoped to your account with `Workers Scripts: Edit` and `D1: Edit` permissions. Note your Account ID too (right sidebar of any Cloudflare dashboard page).
+3. In the GitHub repo, set up two **Environments** (Settings → Environments → New environment): `staging` and `production`. For `production`, add a required reviewer if you want a human gate on top of the confirmation prompt in the workflow — the confirmation input alone stops accidental clicks, not a determined one.
+4. Add these as **repository secrets** (Settings → Secrets and variables → Actions), or scope `CLOUDFLARE_D1_DATABASE_ID_*` to their respective environment instead if you'd rather keep staging/production credentials separated:
+   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_ACCOUNT_ID`
+   - `CLOUDFLARE_D1_DATABASE_ID_STAGING`
+   - `CLOUDFLARE_D1_DATABASE_ID_PRODUCTION`
+5. That's it — `.github/workflows/deploy-staging.yml` deploys to the `niyyah-community-staging` Worker automatically on every merge to `main`; `.github/workflows/deploy-production.yml` only runs when you manually trigger it (Actions tab → "Deploy (production)" → Run workflow), and requires typing `niyyah-community` to confirm.
+
+This was verified in this sandbox as far as it can be without your Cloudflare credentials: `pnpm build` was run for real, `scripts/patch-wrangler-config.mjs` was run against its actual output and confirmed to patch the right fields, and `wrangler deploy --config dist/server/wrangler.json --dry-run` succeeded — resolving the D1 binding and the static assets directory correctly. What wasn't and couldn't be tested here is a real authenticated deploy. **Before trusting the CI workflows, do one deploy by hand first:**
+```bash
+pnpm build
+node scripts/patch-wrangler-config.mjs niyyah-community-staging <your-staging-database-id>
+npx wrangler deploy --config dist/server/wrangler.json
+```
+Confirm the app actually works against the fresh D1 database (the schema self-creates on first request via the `prepare*Table*` functions in `db/index.js` — you don't need to run the `drizzle/` migrations separately for the app to function, though they're there for reference/schema history). Once that works, the GitHub Actions versions are doing exactly the same thing.
+
 ## What this does *not* do yet
 
 - **Backlog sequencing is a soft check, not a hard gate.** The published backlog board (P0/P1/P2/P3) lives outside GitHub, and a GitHub Actions runner has no API access to it. Claude's review reads backlog codes out of branch names/PR descriptions and flags dependency risk in its review comment, but it won't refuse to merge a P2 PR just because a P0 item is still open. If you want this enforced for real, the practical path is exporting the backlog's current state as a JSON file committed to this repo (even a manually-updated one) that the review prompt is told to read.
-- **Deployment sequencing isn't wired up.** This repo's current deployment path is the OpenAI Sites hosting referenced in `.openai/hosting.json` / `CLAUDE_HANDOFF.md`, not a `wrangler deploy` you control directly from GitHub Actions — so there isn't yet a staging/production CD workflow here. Once you decide how you actually want this repo deployed going forward, that's a separate, small addition (a `deploy.yml` that runs on merge to `main` for staging, plus a manually-triggered one for production) — happy to build it once the target's confirmed.
+- **No smoke test after deploy.** `deploy-staging.yml` deploys and stops; it doesn't hit the staging URL afterward to confirm it's actually serving. Worth adding once the app has a cheap health-check route.

@@ -1,0 +1,53 @@
+name: Deploy (production)
+
+# Manual promotion only — this never runs automatically. Trigger it from
+# the Actions tab (or `gh workflow run deploy-production.yml`) once a
+# staging deploy has been checked out. Requires typing the exact Worker
+# name as confirmation, as a guard against firing this by habit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type the production Worker name to confirm'
+        required: true
+
+jobs:
+  deploy:
+    name: deploy production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Confirm
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "niyyah-community" ]; then
+            echo "Confirmation input didn't match 'niyyah-community' — aborting." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Patch Worker config for production
+        run: node scripts/patch-wrangler-config.mjs "niyyah-community" "${{ secrets.CLOUDFLARE_D1_DATABASE_ID_PRODUCTION }}"
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config dist/server/wrangler.json
