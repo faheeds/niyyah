@@ -1,8 +1,8 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 export async function POST(request){
-  const user=await getChatGPTUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const body=await request.json(), organizationId=String(body.organizationId||''), eventId=String(body.eventId||''), role=String(body.role||'').trim().slice(0,100), hours=Number(body.hours), date=String(body.date||'')
   if(!organizationId||!role||!Number.isInteger(hours)||hours<1||hours>1000||!/^\d{4}-\d{2}-\d{2}$/.test(date))return Response.json({error:'Complete every activity field.'},{status:400})
   const db=await prepareCommunityTables(), organization=await db.prepare('SELECT id,name FROM organizations WHERE id=?').bind(organizationId).first()

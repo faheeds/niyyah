@@ -44,6 +44,32 @@ export async function prepareMembersTable() {
   return db
 }
 
+export async function prepareAuthTables() {
+  const db = env.DB
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT,
+      password_salt TEXT,
+      google_sub TEXT UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      account_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    )`),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_account ON auth_sessions(account_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
+  ])
+  await db.prepare('PRAGMA optimize').run()
+  return db
+}
+
 export async function prepareCommunityTables() {
   const db = env.DB
   await db.batch([

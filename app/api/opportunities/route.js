@@ -1,11 +1,11 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 const parse=value=>{try{return JSON.parse(value||'[]')}catch{return[]}}
 const area=postcode=>String(postcode||'').toUpperCase().replace(/\s/g,'').slice(0,3)
 
 export async function GET(){
-  const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const db=await prepareCommunityTables(),profile=await db.prepare('SELECT interests,postcode FROM member_profiles WHERE user_id=?').bind(user.userId).first()
   const events=await db.prepare(`SELECT e.*,o.name AS organization_name,v.compensation_type,v.pay_details,s.selected_date,s.selected_time,
     CASE WHEN va.user_id IS NOT NULL OR ep.user_id IS NOT NULL THEN 1 ELSE 0 END AS joined
@@ -14,7 +14,7 @@ export async function GET(){
     LEFT JOIN volunteer_applications va ON va.event_id=e.id AND va.user_id=?
     LEFT JOIN event_participations ep ON ep.event_id=e.id AND ep.user_id=?
     LEFT JOIN event_signup_slots s ON s.event_id=e.id AND s.user_id=?
-    WHERE e.status='published' ORDER BY e.start_at`).bind(user.userId,user.userId,user.userId).all()
+    WHERE e.status='published' AND o.status='approved' ORDER BY e.start_at`).bind(user.userId,user.userId,user.userId).all()
   const friends=await db.prepare(`SELECT CASE WHEN requester_id=? THEN recipient_id ELSE requester_id END AS friend_id FROM member_connections WHERE status='accepted' AND (requester_id=? OR recipient_id=?)`).bind(user.userId,user.userId,user.userId).all()
   const friendIds=(friends.results??[]).map(x=>x.friend_id),friendMap={}
   for(const friendId of friendIds){
@@ -27,8 +27,8 @@ export async function GET(){
 }
 
 export async function POST(request){
-  const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
-  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT id,organization_id,event_type,start_at,end_at FROM organization_events WHERE id=? AND status='published'").bind(String(eventId||'')).first()
+  const user=await getUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT e.id,e.organization_id,e.event_type,e.start_at,e.end_at FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.id=? AND e.status='published' AND o.status='approved'").bind(String(eventId||'')).first()
   if(!event)return Response.json({error:'Opportunity not found.'},{status:404})
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||!/^\d{2}:\d{2}$/.test(String(time||'')))return Response.json({error:'Choose a valid date and time slot.'},{status:400})
   const chosen=new Date(`${date}T${time}`),start=new Date(event.start_at),end=new Date(event.end_at)

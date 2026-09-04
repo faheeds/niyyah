@@ -26,12 +26,12 @@ Niyyah connects volunteers with nonprofit and community organizations. Preserve 
 - `app/help/`: help page.
 - `app/api/`: server endpoints for profiles, events, organizers, applications, opportunities, friends, volunteer activity and signup.
 - `db/index.js`: D1 queries and table initialization helpers.
-- `app/chatgpt-auth.ts`: host-provided identity adapter.
+- `app/auth.ts`: standalone identity adapter (email+password + Google OAuth, session cookie, no host dependency).
 - `vite.config.js`: Vinext, Sites and Cloudflare plugins.
 
 ## Important migration dependencies
 
-1. Authentication currently relies on trusted host-injected `oai-authenticated-user-*` headers and the host's `/signin-with-chatgpt` flow. These are NOT a standalone email/password login system. On another host, replace the adapter and authentication links with a real session/authentication provider. Never accept user-supplied identity headers as proof of login; the current trust model requires the original hosting boundary.
+1. **Resolved.** Authentication no longer depends on any hosting boundary. `app/auth.ts` is a standalone adapter: email+password (PBKDF2-hashed, `accounts` table) and Google OAuth (authorization-code flow, `app/api/auth/google*`), both resolving to a bearer session token stored in the `auth_sessions` table and set as an `HttpOnly` cookie (`niyyah_session`). Works from any browser/device — no special host required. Google sign-in needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` configured (see `README-CLAUDE-GITHUB-SETUP.md`); email+password works without any extra setup.
 2. Database calls import `env` from `cloudflare:workers` and use `env.DB`. Provide your own D1 binding or adapt the data layer for another database. The database ID in `vite.config.js` is a local placeholder, not production credentials.
 3. `.openai/hosting.json` identifies the existing Sites deployment and its logical binding. It is preserved as source configuration, not authorization to deploy or access data. Do not assume it creates a usable deployment on a different service.
 4. `@openai/sites-vite-plugin` is part of the existing build. If moving hosting, assess and replace its integration deliberately rather than removing dependencies blindly.

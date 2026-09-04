@@ -1,10 +1,10 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 const clean = (value, max = 200) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
 export async function GET() {
-  const user = await getChatGPTUser()
+  const user = await getUser()
   if (!user) return Response.json({ error: 'Sign in required.' }, { status: 401 })
   const db = await prepareCommunityTables()
   const now = new Date().toISOString()
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function PUT(request) {
-  const user = await getChatGPTUser()
+  const user = await getUser()
   if (!user) return Response.json({ error:'Sign in required.' },{status:401})
   const body = await request.json()
   const displayName=clean(body.displayName,80), interests=Array.isArray(body.interests)?body.interests.map(v=>clean(v,40)).filter(Boolean).slice(0,8):[]

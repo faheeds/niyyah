@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
@@ -7,7 +7,7 @@ const requiredOrganization=['name','organizationType','email','phone','address',
 async function ownedOrganization(db,userId){return db.prepare('SELECT * FROM organizations WHERE owner_user_id = ?').bind(userId).first()}
 
 export async function GET(){
-  const user=await getChatGPTUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const db=await prepareCommunityTables(), organization=await ownedOrganization(db,user.userId)
   if(!organization)return Response.json({organization:null,events:[],hours:[],applications:[]})
   const [events,hours,applications]=await Promise.all([
@@ -35,7 +35,7 @@ export async function GET(){
 }
 
 export async function POST(request){
-  const user=await getChatGPTUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const body=await request.json(), action=clean(body.action,30), db=await prepareCommunityTables(), now=new Date().toISOString()
   let organization=await ownedOrganization(db,user.userId)
   if(action==='saveOrganization'){
