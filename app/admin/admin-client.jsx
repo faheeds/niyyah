@@ -11,7 +11,7 @@ export default function AdminClient({user}){
   if(data.error)return <main className="member-loading">{data.error}</main>
   const pending=data.organizations.filter(o=>o.status==='pending'),reviewed=data.organizations.filter(o=>o.status!=='pending')
   return <main className="member-shell organizer-shell">
-    <header className="member-nav"><a className="brand" href="/"><span className="brand-mark"><HeartHandshake size={21}/></span><span><b>Niyyah</b><small>Admin review</small></span></a><a className="back-home" href="/"><ArrowLeft size={16}/> Public site</a><a className="signout-link" href="/api/auth/signout?return_to=/">Sign out</a></header>
+    <header className="member-nav"><a className="brand" href="/"><span className="brand-mark"><HeartHandshake size={21}/></span><span><b>Niyyah</b><small>Admin review</small></span></a><a className="back-home" href="/"><ArrowLeft size={16}/> Public site</a>{user&&<small className="admin-signed-in-as">Signed in as {user.displayName||user.email}</small>}<a className="signout-link" href="/api/auth/signout?return_to=/">Sign out</a></header>
     {notice&&<div className="member-notice">{notice}</div>}
     <section className="member-card wide hours-queue">
       <div className="card-title"><span><ShieldCheck size={15}/></span><div><h2>Organizations waiting for approval</h2><p>Nobody's events show up for volunteers to join until you approve their organization here.</p></div></div>

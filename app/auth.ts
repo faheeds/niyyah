@@ -7,7 +7,7 @@ import { prepareAuthTables } from '../db/index.js'
 // in db/index.js); identity comes from either a Google sign-in or an email +
 // password the person set themselves — never from a trusted header again.
 
-export type NiyyahUser = { userId: string; displayName: string; email: string; fullName: string | null }
+export type NiyyahUser = { userId: string; displayName: string; email: string; fullName: string | null; emailVerified: boolean }
 
 const SESSION_COOKIE = 'niyyah_session'
 const SESSION_DAYS = 30
@@ -83,9 +83,14 @@ export async function getUser(): Promise<NiyyahUser | null> {
   const token = readSessionToken(requestHeaders.get('cookie'))
   if (!token) return null
   const db = await prepareAuthTables()
-  const row: any = await db.prepare(`SELECT a.id,a.email,a.display_name FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=? AND s.expires_at>?`).bind(token, new Date().toISOString()).first()
+  const row: any = await db.prepare(`SELECT a.id,a.email,a.display_name,a.google_sub FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=? AND s.expires_at>?`).bind(token, new Date().toISOString()).first()
   if (!row) return null
-  return { userId: row.id, email: row.email, displayName: row.display_name, fullName: row.display_name }
+  // emailVerified is true only when Google has vouched for this address at some point
+  // (see app/api/auth/google/callback/route.js, which checks email_verified before
+  // setting google_sub). A password-only signup never sets google_sub, so its email
+  // is self-asserted and must never be trusted for authorization decisions (e.g. the
+  // /admin allowlist in app/api/admin-organizations/route.js).
+  return { userId: row.id, email: row.email, displayName: row.display_name, fullName: row.display_name, emailVerified: !!row.google_sub }
 }
 
 export async function requireUser(returnTo: string): Promise<NiyyahUser> {

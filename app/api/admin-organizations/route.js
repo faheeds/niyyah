@@ -6,7 +6,10 @@ import { prepareCommunityTables } from '../../../db/index.js'
 // Niyyah sign-in email here to give them access to /admin.
 const ADMIN_EMAILS = ['faheed.subhani@gmail.com']
 
-const isAdmin = user => !!user && ADMIN_EMAILS.includes(String(user.email || '').toLowerCase())
+// emailVerified requires the account to have signed in with Google at least once
+// (see app/auth.ts) - a password signup can claim any email with no proof, so an
+// unverified email must never grant admin access on its own.
+const isAdmin = user => !!user && user.emailVerified && ADMIN_EMAILS.includes(String(user.email || '').toLowerCase())
 
 export async function GET(){
   const user = await getUser()

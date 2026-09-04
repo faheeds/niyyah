@@ -1,4 +1,5 @@
-import { prepareMembersTable } from '../../../db/index.js'
+import { prepareMembersTable, prepareAuthTables } from '../../../db/index.js'
+import { hashPassword, createSession, sessionCookieHeader } from '../../auth.ts'
 
 const allowedAgeGroups = new Set(['13–15', '16–17', '18–24', '25–34', '35+'])
 const allowedContacts = new Set(['Email', 'Text message', 'WhatsApp'])
@@ -17,9 +18,13 @@ export async function POST(request) {
     const postcode = clean(body.postcode, 16).toUpperCase()
     const preferredContact = clean(body.preferredContact, 30)
     const interests = Array.isArray(body.interests) ? body.interests.map((item) => clean(item, 40)).filter(Boolean).slice(0, 8) : []
+    const password = typeof body.password === 'string' ? body.password : ''
 
     if (!firstName || !lastName || !email || !/^\S+@\S+\.\S+$/.test(email) || !allowedAgeGroups.has(ageGroup) || !postcode || !allowedContacts.has(preferredContact) || interests.length === 0 || body.consent !== true) {
       return Response.json({ error: 'Please complete all required fields.' }, { status: 400 })
+    }
+    if (password.length < 8) {
+      return Response.json({ error: 'Choose a password with at least 8 characters.' }, { status: 400 })
     }
 
     const db = await prepareMembersTable()
@@ -57,7 +62,30 @@ export async function POST(request) {
       if(challenge&&String(challenge.inviter_email).toLowerCase()!==email)await db.prepare(`INSERT INTO volunteer_referrals (id,inviter_user_id,invitee_email,status,created_at) VALUES (?,?,?,?,?) ON CONFLICT(invitee_email) DO NOTHING`).bind(crypto.randomUUID(),challenge.inviter_user_id,email,'pending',now).run()
     }
 
-    return Response.json({ ok: true })
+    // This form is the main volunteer sign-up funnel (see /join -> /volunteer-access ->
+    // "Volunteer sign up"), and /profile requires a real session (requireUser()). So this
+    // also creates the person's login account here, using the password they just chose,
+    // rather than leaving them at a dead end with community details saved but no way to
+    // sign in. If an account with this email already exists, we do NOT log the submitter
+    // in - that would let anyone log into someone else's account just by knowing their
+    // email and submitting this form with a different password. Those requests get sent
+    // to sign in normally instead.
+    const authDb = await prepareAuthTables()
+    const existingAccount = await authDb.prepare('SELECT id FROM accounts WHERE email=?').bind(email).first()
+    let sessionCookie = null
+    if (!existingAccount) {
+      const { hash, salt } = await hashPassword(password)
+      const accountId = crypto.randomUUID()
+      const displayName = `${firstName} ${lastName}`.trim() || email
+      await authDb.prepare('INSERT INTO accounts (id,email,display_name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)')
+        .bind(accountId, email, displayName, hash, salt, now, now).run()
+      sessionCookie = sessionCookieHeader(await createSession(accountId))
+    }
+
+    return Response.json(
+      { ok: true, alreadyRegistered: !sessionCookie },
+      sessionCookie ? { headers: { 'Set-Cookie': sessionCookie } } : undefined,
+    )
   } catch {
     return Response.json({ error: 'We could not save your signup. Please try again.' }, { status: 500 })
   }
