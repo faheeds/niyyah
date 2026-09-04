@@ -1,6 +1,6 @@
 name: Deploy (production)
 
-# Manual promotion only â€” this never runs automatically. Trigger it from
+# Manual promotion only — this never runs automatically. Trigger it from
 # the Actions tab (or `gh workflow run deploy-production.yml`) once a
 # staging deploy has been checked out. Requires typing the exact Worker
 # name as confirmation, as a guard against firing this by habit.
@@ -21,7 +21,7 @@ jobs:
       - name: Confirm
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "niyyah-community" ]; then
-            echo "Confirmation input didn't match 'niyyah-community' â€” aborting." >&2
+            echo "Confirmation input didn't match 'niyyah-community' — aborting." >&2
             exit 1
           fi
 
@@ -30,6 +30,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
