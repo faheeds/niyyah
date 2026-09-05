@@ -1,10 +1,10 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 const clean = (value, max = 200) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
 export async function GET() {
-  const user = await getChatGPTUser()
+  const user = await getUser()
   if (!user) return Response.json({ error: 'Sign in required.' }, { status: 401 })
   const db = await prepareCommunityTables()
   const now = new Date().toISOString()
@@ -17,14 +17,16 @@ export async function GET() {
   const referrals=referralRows.results??[],completedCount=referrals.filter(item=>item.status==='completed').length
   const profile = await db.prepare('SELECT * FROM member_profiles WHERE user_id = ?').bind(user.userId).first()
   const activities = await db.prepare('SELECT * FROM volunteer_activities WHERE user_id = ? ORDER BY activity_date DESC LIMIT 30').bind(user.userId).all()
-  const organizations=await db.prepare("SELECT id,name FROM organizations ORDER BY name").all()
-  const events=await db.prepare("SELECT id,organization_id,title FROM organization_events WHERE status='published' AND event_type='volunteering' ORDER BY start_at").all()
+  // P0-01: only approved organizations (and their events) should populate the
+  // hours-logging dropdown - pending/rejected orgs haven't been checked yet.
+  const organizations=await db.prepare("SELECT id,name FROM organizations WHERE status='approved' ORDER BY name").all()
+  const events=await db.prepare("SELECT e.id,e.organization_id,e.title FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.status='published' AND e.event_type='volunteering' AND o.status='approved' ORDER BY e.start_at").all()
   const totalHours = (activities.results ?? []).filter(item=>item.status==='approved').reduce((sum,item) => sum + Number(item.hours || 0),0)
   return Response.json({ profile:{...profile,interests:JSON.parse(profile.interests || '[]')},activities:activities.results ?? [],organizations:organizations.results??[],events:events.results??[],progress:getProgress(totalHours),challenge:{inviteCode:challenge.invite_code,completedCount,target:3,complete:completedCount>=3,referrals,notifications:referrals.filter(item=>item.status==='completed').map(item=>({id:item.id,message:`${[item.first_name,item.last_name].filter(Boolean).join(' ')||item.invitee_email} joined through your invitation.`,date:item.completed_at}))} })
 }
 
 export async function PUT(request) {
-  const user = await getChatGPTUser()
+  const user = await getUser()
   if (!user) return Response.json({ error:'Sign in required.' },{status:401})
   const body = await request.json()
   const displayName=clean(body.displayName,80), interests=Array.isArray(body.interests)?body.interests.map(v=>clean(v,40)).filter(Boolean).slice(0,8):[]

@@ -116,3 +116,14 @@ export const volunteerReferrals = sqliteTable('volunteer_referrals', {
   id:text('id').primaryKey(), inviterUserId:text('inviter_user_id').notNull(), inviteeEmail:text('invitee_email').notNull().unique(),
   inviteeUserId:text('invitee_user_id'), status:text('status').notNull().default('pending'), createdAt:text('created_at').notNull(), completedAt:text('completed_at'),
 })
+
+export const accounts = sqliteTable('accounts', {
+  id: text('id').primaryKey(), email: text('email').notNull().unique(), displayName: text('display_name').notNull(),
+  passwordHash: text('password_hash'), passwordSalt: text('password_salt'), googleSub: text('google_sub').unique(),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+})
+
+export const authSessions = sqliteTable('auth_sessions', {
+  id: text('id').primaryKey(), accountId: text('account_id').notNull(),
+  createdAt: text('created_at').notNull(), expiresAt: text('expires_at').notNull(),
+})

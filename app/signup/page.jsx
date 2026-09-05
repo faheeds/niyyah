@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Check, HeartHandshake, LoaderCircle, LockKeyhole
 const interestOptions = ['Faith & learning', 'Community meals', 'Volunteering', 'Creative projects', 'Sports & wellbeing', 'Careers & ideas']
 
 const initialForm = {
-  firstName: '', lastName: '', email: '', phone: '', ageGroup: '', postcode: '',
+  firstName: '', lastName: '', email: '', password: '', phone: '', ageGroup: '', postcode: '',
   preferredContact: 'Email', heardAboutUs: '', instagram: '', tiktok: '', otherSocial: '',
   interests: [], consent: false, updatesOptIn: false, referralCode: '',
 }
@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [eventId, setEventId] = useState('')
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false)
   useEffect(()=>{const search=new URLSearchParams(window.location.search);const code=search.get('ref')||'';if(code)setForm(current=>({...current,referralCode:code}));const event=search.get('event')||'';if(event)setEventId(event)},[])
 
   const update = (event) => {
@@ -42,6 +43,7 @@ export default function SignupPage() {
       const response = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Please try again.')
+      setAlreadyRegistered(!!result.alreadyRegistered)
       setStatus('success')
     } catch (submissionError) {
       setError(submissionError.message)
@@ -50,13 +52,15 @@ export default function SignupPage() {
   }
 
   if (status === 'success') {
+    const destination = eventId ? `/opportunities?join=${encodeURIComponent(eventId)}` : '/profile'
+    const continueHref = alreadyRegistered ? `/signin?return_to=${encodeURIComponent(destination)}` : destination
     return <main className="signup-shell success-shell">
       <section className="signup-success">
         <span className="success-icon"><Check size={34} /></span>
         <span className="signup-kicker">You’re on the journey</span>
         <h1>Welcome, {form.firstName}.</h1>
-        <p>We’ve saved your details. You can now explore what’s happening and choose your first event.</p>
-        <a className="signup-submit" href={eventId ? `/opportunities?join=${encodeURIComponent(eventId)}` : '/profile'}>{eventId ? <>Continue to that opportunity <ArrowRight size={18} /></> : <>Build my profile <ArrowRight size={18} /></>}</a>
+        <p>{alreadyRegistered ? 'We’ve saved your details. Looks like you already have a Niyyah account with this email — sign in to continue.' : 'We’ve saved your details and set up your account. You can now explore what’s happening and choose your first event.'}</p>
+        <a className="signup-submit" href={continueHref}>{alreadyRegistered ? <>Sign in to continue <ArrowRight size={18} /></> : eventId ? <>Continue to that opportunity <ArrowRight size={18} /></> : <>Build my profile <ArrowRight size={18} /></>}</a>
       </section>
     </main>
   }
@@ -88,7 +92,10 @@ export default function SignupPage() {
             <label>Phone number <span>(optional)</span><input name="phone" type="tel" value={form.phone} onChange={update} autoComplete="tel" /></label>
           </div>
           <div className="field-grid two">
+            <label>Create a password *<input name="password" type="password" value={form.password} onChange={update} autoComplete="new-password" minLength={8} required /></label>
             <label>Age range *<select name="ageGroup" value={form.ageGroup} onChange={update} required><option value="">Choose one</option>{['13–15', '16–17', '18–24', '25–34', '35+'].map((age) => <option key={age}>{age}</option>)}</select></label>
+          </div>
+          <div className="field-grid two">
             <label>Postcode *<input name="postcode" value={form.postcode} onChange={update} autoComplete="postal-code" placeholder="e.g. E1 6AN" required /></label>
           </div>
         </section>

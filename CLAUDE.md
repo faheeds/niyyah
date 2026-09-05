@@ -46,7 +46,7 @@ So, on every PR that touches `db/index.js`, a migration, or any query against a 
 In rough priority order:
 
 1. **Correctness of the schema-drift rule above** — this is the highest-value check given the app's history.
-2. Auth/identity handling — this app currently trusts host-injected `oai-authenticated-user-*` headers (see `CLAUDE_HANDOFF.md`). Never approve a change that trusts a new source of "who is this user" without going through the existing adapter.
+2. Auth/identity handling — this app has its own standalone auth system (`app/auth.ts`): email+password (PBKDF2-hashed) and Google OAuth, both resolving to a session cookie (`niyyah_session`) backed by the `auth_sessions`/`accounts` tables. All server code reads identity via `getUser()`/`requireUser()` from `app/auth.ts` — never approve a change that trusts a new source of "who is this user" (a header, a query param, a different cookie) without going through this existing adapter.
 3. Anything that touches capacity limits, hours-approval status transitions, or referral-completion logic — these have subtle state machines; check that new code respects existing status values instead of inventing new ones.
 4. Build correctness (imports, unused/missing deps) — CI covers `pnpm build` failing outright, but flag things like dead imports or obviously unused state even if the build still passes.
 5. Consistency with the existing pastel visual theme in `src/styles.css` — flag as a nit, not a blocker, unless it's a clear regression.

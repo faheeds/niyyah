@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '../../chatgpt-auth.ts'
+import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
@@ -7,7 +7,7 @@ const requiredOrganization=['name','organizationType','email','phone','address',
 async function ownedOrganization(db,userId){return db.prepare('SELECT * FROM organizations WHERE owner_user_id = ?').bind(userId).first()}
 
 export async function GET(){
-  const user=await getChatGPTUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const db=await prepareCommunityTables(), organization=await ownedOrganization(db,user.userId)
   if(!organization)return Response.json({organization:null,events:[],hours:[],applications:[]})
   const [events,hours,applications]=await Promise.all([
@@ -35,7 +35,7 @@ export async function GET(){
 }
 
 export async function POST(request){
-  const user=await getChatGPTUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
+  const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const body=await request.json(), action=clean(body.action,30), db=await prepareCommunityTables(), now=new Date().toISOString()
   let organization=await ownedOrganization(db,user.userId)
   if(action==='saveOrganization'){
@@ -70,6 +70,9 @@ export async function POST(request){
     await db.prepare('DELETE FROM organization_events WHERE id=? AND organization_id=?').bind(clean(body.id,80),organization.id).run(); return Response.json({ok:true})
   }
   if(action==='reviewHours'){
+    // P0-01: an org that isn't approved yet shouldn't be able to verify hours -
+    // those hours feed volunteers' verified totals, levels and badges.
+    if(organization.status!=='approved')return Response.json({error:'Your organization must be approved before you can review volunteer hours.'},{status:403})
     const status=body.status==='approved'?'approved':body.status==='rejected'?'rejected':null
     if(!status)return Response.json({error:'Invalid review decision.'},{status:400})
     const mapped=await db.prepare('SELECT activity_id FROM volunteer_activity_organizations WHERE activity_id=? AND organization_id=?').bind(clean(body.activityId,80),organization.id).first()
