@@ -69,6 +69,7 @@ jobs:
                CLAUDE.md's sequencing section), don't block on that alone — note
                it in your review body so a human sees the flag, but still approve
                and auto-merge if the code itself is sound.
+          show_full_output: true
           claude_args: |
             --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr review:*),Bash(gh pr merge:*)"
             --max-turns 60
