@@ -70,5 +70,5 @@ jobs:
                it in your review body so a human sees the flag, but still approve
                and auto-merge if the code itself is sound.
           claude_args: |
-            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr review:*),Bash(gh pr merge:*)"
+            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr review:*),Bash(gh pr merge:*)"
             --max-turns 60
