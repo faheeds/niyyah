@@ -1,15 +1,14 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
+import { ADMIN_EMAILS } from '../../admin-emails.js'
 
-// Temporary hardcoded admin allowlist (see backlog: this should become a real
-// roles system later, tracked separately so it isn't lost). Add a teammate's
-// Niyyah sign-in email here to give them access to /admin.
-const ADMIN_EMAILS = ['faheed.subhani@gmail.com']
-
-// emailVerified requires the account to have signed in with Google at least once
-// (see app/auth.ts) - a password signup can claim any email with no proof, so an
-// unverified email must never grant admin access on its own.
-const isAdmin = user => !!user && user.emailVerified && ADMIN_EMAILS.includes(String(user.email || '').toLowerCase())
+// Admin access is gated on ADMIN_EMAILS membership alone - not on
+// emailVerified/Google - because both public sign-up routes refuse to
+// register any address on that list (see app/admin-emails.js), so no account
+// with a matching email can be created by a member of the public. Requiring
+// emailVerified here as well would make /admin unreachable until Google
+// sign-in is configured, with no in-app remedy.
+const isAdmin = user => !!user && ADMIN_EMAILS.includes(String(user.email || '').toLowerCase())
 
 export async function GET(){
   const user = await getUser()

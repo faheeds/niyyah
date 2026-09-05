@@ -88,6 +88,30 @@ The app has its own standalone login (`app/auth.ts`): email+password works immed
    - `GOOGLE_CLIENT_SECRET` must be encrypted: either the same Variables screen with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah-community-staging` (repeat with `--name niyyah-community` for production once that Worker exists).
 3. That's it — until these are set, the "Continue with Google" button shows a plain "Google sign-in is not set up yet" message instead of erroring, and email+password sign-in/sign-up keeps working normally.
 
+## 7. Bootstrapping the first admin account
+
+`/admin` (approving organizations) is gated on `app/admin-emails.js` — `ADMIN_EMAILS.includes(user.email)`, nothing else. Both public sign-up routes refuse to register any address on that list (so nobody can squat it with a password account), which means the admin account itself can't be created through the normal `/signup` or `/signin` forms either. Create it directly in D1 once, right after your first deploy:
+
+1. Pick a password, then compute its hash the same way `app/auth.ts` does (PBKDF2-SHA256, 120,000 iterations) — run this with Node 18+ on your machine:
+   ```bash
+   node -e "
+   const password = 'choose-a-real-password-here';
+   crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']).then(async key => {
+     const salt = crypto.getRandomValues(new Uint8Array(16));
+     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
+     const b64 = (bytes) => Buffer.from(bytes).toString('base64');
+     console.log('password_hash:', b64(new Uint8Array(bits)));
+     console.log('password_salt:', b64(salt));
+   });
+   "
+   ```
+2. Insert the account row (swap in your email, display name, and the hash/salt printed above), pointing at the same database each environment uses:
+   ```bash
+   npx wrangler d1 execute niyyah-community-staging --remote --command="INSERT INTO accounts (id,email,display_name,password_hash,password_salt,created_at,updated_at) VALUES (lower(hex(randomblob(16))),'faheed.subhani@gmail.com','Faheed','<password_hash>','<password_salt>',datetime('now'),datetime('now'))"
+   ```
+   Repeat with `niyyah-community-production` once that database is in use.
+3. Sign in at `/signin` with that email and password — you'll land with admin access to `/admin` immediately, no Google setup required. (Signing in with Google instead works too, once section 6 above is configured — it creates the same kind of row, just with `google_sub` set instead of a password.)
+
 ## What this does *not* do yet
 
 - **Backlog sequencing is a soft check, not a hard gate.** The published backlog board (P0/P1/P2/P3) lives outside GitHub, and a GitHub Actions runner has no API access to it. Claude's review reads backlog codes out of branch names/PR descriptions and flags dependency risk in its review comment, but it won't refuse to merge a P2 PR just because a P0 item is still open. If you want this enforced for real, the practical path is exporting the backlog's current state as a JSON file committed to this repo (even a manually-updated one) that the review prompt is told to read.
