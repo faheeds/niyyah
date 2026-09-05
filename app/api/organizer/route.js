@@ -70,6 +70,9 @@ export async function POST(request){
     await db.prepare('DELETE FROM organization_events WHERE id=? AND organization_id=?').bind(clean(body.id,80),organization.id).run(); return Response.json({ok:true})
   }
   if(action==='reviewHours'){
+    // P0-01: an org that isn't approved yet shouldn't be able to verify hours -
+    // those hours feed volunteers' verified totals, levels and badges.
+    if(organization.status!=='approved')return Response.json({error:'Your organization must be approved before you can review volunteer hours.'},{status:403})
     const status=body.status==='approved'?'approved':body.status==='rejected'?'rejected':null
     if(!status)return Response.json({error:'Invalid review decision.'},{status:400})
     const mapped=await db.prepare('SELECT activity_id FROM volunteer_activity_organizations WHERE activity_id=? AND organization_id=?').bind(clean(body.activityId,80),organization.id).first()

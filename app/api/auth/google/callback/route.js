@@ -45,14 +45,35 @@ export async function GET(request) {
   const db = await prepareAuthTables()
   const email = String(claims.email).toLowerCase()
   const now = new Date().toISOString()
-  let account = await db.prepare('SELECT id FROM accounts WHERE google_sub=? OR email=?').bind(claims.sub, email).first()
+
+  // Look up strictly by google_sub first - the only identifier Google itself
+  // vouches for. We deliberately do NOT also match by email here: an email
+  // is a self-asserted claim until Google confirms it (see emailVerified in
+  // app/auth.ts), because /api/auth/signup lets anyone register any email
+  // with no ownership check. Matching on email would let someone who
+  // pre-registers a victim's address with a password of their choosing
+  // silently inherit that victim's account the moment the real owner signs
+  // in with Google - and keep their password access to it afterward.
+  let account = await db.prepare('SELECT id FROM accounts WHERE google_sub=?').bind(claims.sub).first()
   if (!account) {
-    const id = crypto.randomUUID()
-    await db.prepare('INSERT INTO accounts (id,email,display_name,google_sub,created_at,updated_at) VALUES (?,?,?,?,?,?)')
-      .bind(id, email, claims.name || email, claims.sub, now, now).run()
-    account = { id }
-  } else {
-    await db.prepare('UPDATE accounts SET google_sub=?,updated_at=? WHERE id=?').bind(claims.sub, now, account.id).run()
+    const existingByEmail = await db.prepare('SELECT id,password_hash FROM accounts WHERE email=?').bind(email).first()
+    if (existingByEmail) {
+      if (existingByEmail.password_hash) {
+        // This address already belongs to a password account. Only that
+        // account's owner - authenticated with the password - should be able
+        // to attach Google to it, not this unauthenticated callback.
+        return new Response('An account already exists with this email. Please sign in with your password instead.', { status: 409 })
+      }
+      // No password on this row, so it was created by an earlier Google
+      // sign-in with the same address (e.g. an interrupted flow) - safe to claim.
+      account = existingByEmail
+      await db.prepare('UPDATE accounts SET google_sub=?,updated_at=? WHERE id=?').bind(claims.sub, now, account.id).run()
+    } else {
+      const id = crypto.randomUUID()
+      await db.prepare('INSERT INTO accounts (id,email,display_name,google_sub,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+        .bind(id, email, claims.name || email, claims.sub, now, now).run()
+      account = { id }
+    }
   }
 
   const token = await createSession(account.id)
