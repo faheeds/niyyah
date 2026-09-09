@@ -21,8 +21,12 @@ export async function GET() {
   // hours-logging dropdown - pending/rejected orgs haven't been checked yet.
   const organizations=await db.prepare("SELECT id,name FROM organizations WHERE status='approved' ORDER BY name").all()
   const events=await db.prepare("SELECT e.id,e.organization_id,e.title FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.status='published' AND e.event_type='volunteering' AND o.status='approved' ORDER BY e.start_at").all()
+  // A volunteer's own roster standing with each organization they've joined
+  // or been auto-enrolled in - see app/org-membership.js and
+  // app/api/organization-membership/route.js.
+  const memberships=await db.prepare(`SELECT m.organization_id,o.name AS organization_name,m.tag,m.status FROM organization_members m JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=? ORDER BY m.created_at DESC`).bind(user.userId).all()
   const totalHours = (activities.results ?? []).filter(item=>item.status==='approved').reduce((sum,item) => sum + Number(item.hours || 0),0)
-  return Response.json({ profile:{...profile,interests:JSON.parse(profile.interests || '[]')},activities:activities.results ?? [],organizations:organizations.results??[],events:events.results??[],progress:getProgress(totalHours),challenge:{inviteCode:challenge.invite_code,completedCount,target:3,complete:completedCount>=3,referrals,notifications:referrals.filter(item=>item.status==='completed').map(item=>({id:item.id,message:`${[item.first_name,item.last_name].filter(Boolean).join(' ')||item.invitee_email} joined through your invitation.`,date:item.completed_at}))} })
+  return Response.json({ profile:{...profile,interests:JSON.parse(profile.interests || '[]')},activities:activities.results ?? [],organizations:organizations.results??[],events:events.results??[],memberships:memberships.results??[],progress:getProgress(totalHours),challenge:{inviteCode:challenge.invite_code,completedCount,target:3,complete:completedCount>=3,referrals,notifications:referrals.filter(item=>item.status==='completed').map(item=>({id:item.id,message:`${[item.first_name,item.last_name].filter(Boolean).join(' ')||item.invitee_email} joined through your invitation.`,date:item.completed_at}))} })
 }
 
 export async function PUT(request) {

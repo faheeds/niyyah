@@ -145,6 +145,26 @@ export async function prepareCommunityTables() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS organization_email_domains (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(organization_id, domain)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS organization_members (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      tag TEXT NOT NULL DEFAULT 'external',
+      status TEXT NOT NULL DEFAULT 'pending',
+      source TEXT NOT NULL DEFAULT 'self_requested',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(organization_id, user_id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS organization_events (
       id TEXT PRIMARY KEY NOT NULL,
       organization_id TEXT NOT NULL,
@@ -246,6 +266,9 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_signup_slots_event_date ON event_signup_slots(event_id,selected_date,selected_time)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_requirements_needed ON event_volunteer_requirements(volunteers_needed,auto_pause)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_referrals_inviter_status ON volunteer_referrals(inviter_user_id,status)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_domains_domain ON organization_email_domains(domain)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_members_org_status ON organization_members(organization_id,status)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id)'),
   ])
   await db.prepare('PRAGMA optimize').run()
   return db

@@ -1,6 +1,7 @@
 import { prepareMembersTable, prepareAuthTables } from '../../../db/index.js'
 import { hashPassword, createSession, sessionCookieHeader } from '../../auth.ts'
 import { ADMIN_EMAILS } from '../../admin-emails.js'
+import { autoEnrollBySchoolEmail } from '../../org-membership.js'
 
 const allowedAgeGroups = new Set(['13–15', '16–17', '18–24', '25–34', '35+'])
 const allowedContacts = new Set(['Email', 'Text message', 'WhatsApp'])
@@ -49,14 +50,19 @@ export async function POST(request) {
     const authDb = await prepareAuthTables()
     const existingAccount = await authDb.prepare('SELECT id FROM accounts WHERE email=?').bind(email).first()
     let sessionCookie = null
+    let accountId = existingAccount?.id || null
     if (!existingAccount) {
       const { hash, salt } = await hashPassword(password)
-      const accountId = crypto.randomUUID()
+      accountId = crypto.randomUUID()
       const displayName = `${firstName} ${lastName}`.trim() || email
       await authDb.prepare('INSERT INTO accounts (id,email,display_name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)')
         .bind(accountId, email, displayName, hash, salt, now, now).run()
       sessionCookie = sessionCookieHeader(await createSession(accountId))
     }
+    // Runs whether the account is brand new or already existed - lets a
+    // student whose school registers its domain later get swept in the next
+    // time they submit this form too. See app/org-membership.js.
+    await autoEnrollBySchoolEmail(accountId, email, `${firstName} ${lastName}`.trim() || email)
 
     const db = await prepareMembersTable()
     await db.prepare(`INSERT INTO community_members (

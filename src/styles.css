@@ -160,3 +160,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media (max-width:680px){.org-stat-grid{grid-template-columns:1fr 1fr}.organization-profile-layout{grid-template-columns:1fr}.org-event-list article{align-items:flex-start;flex-direction:column}.org-event-list strong{white-space:normal}}
 @media (max-width:680px){.pass-niyyah-card{grid-template-columns:1fr}.challenge-action{text-align:left}.challenge-action strong{font-size:28px}.challenge-people{flex-wrap:wrap}}
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto!important; transition:none!important; } }
+.roster-domains{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.roster-domains span{display:flex;align-items:center;gap:6px;border:1px solid #cbd8cf;background:#fafaf6;border-radius:99px;padding:8px 10px;font-size:10px;font-weight:700;color:#285346}
+.roster-domains button{border:0;background:none;color:#9a4435;cursor:pointer;display:grid;place-items:center;padding:0}
+.membership-list{display:grid;gap:8px;margin-bottom:16px}
+.membership-list article{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #dbe2db;border-radius:13px;padding:10px 12px}
+.membership-list b{font-size:12px}
+.membership-list span{font-size:9px;color:#7d8986;text-transform:capitalize}

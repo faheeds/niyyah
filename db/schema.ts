@@ -64,6 +64,18 @@ export const organizations = sqliteTable('organizations', {
   createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
 })
 
+export const organizationEmailDomains = sqliteTable('organization_email_domains', {
+  id:text('id').primaryKey(), organizationId:text('organization_id').notNull(), domain:text('domain').notNull(),
+  createdAt:text('created_at').notNull(),
+})
+
+export const organizationMembers = sqliteTable('organization_members', {
+  id:text('id').primaryKey(), organizationId:text('organization_id').notNull(), userId:text('user_id').notNull(),
+  email:text('email').notNull(), displayName:text('display_name').notNull(),
+  tag:text('tag').notNull().default('external'), status:text('status').notNull().default('pending'), source:text('source').notNull().default('self_requested'),
+  createdAt:text('created_at').notNull(), updatedAt:text('updated_at').notNull(),
+})
+
 export const organizationEvents = sqliteTable('organization_events', {
   id: text('id').primaryKey(), organizationId: text('organization_id').notNull(), title: text('title').notNull(),
   summary: text('summary').notNull(), interest: text('interest').notNull(), ageRange: text('age_range').notNull(),
