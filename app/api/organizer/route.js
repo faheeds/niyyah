@@ -3,6 +3,7 @@ import { prepareCommunityTables } from '../../../db/index.js'
 import { resolveOrganizationAccess } from '../../org-admins.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
 import { moderationIssue } from '../../lib/content-filter.js'
+import { sendApplicationStatusUpdate } from '../../lib/notify.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -120,7 +121,12 @@ export async function POST(request){
   }
   if(action==='reviewApplication'){
     const status=['shortlisted','accepted','declined'].includes(body.status)?body.status:null;if(!status)return Response.json({error:'Invalid application status.'},{status:400})
-    await db.prepare('UPDATE volunteer_applications SET status=?,updated_at=? WHERE id=? AND organization_id=?').bind(status,now,clean(body.applicationId,80),organization.id).run();return Response.json({ok:true})
+    const applicationId=clean(body.applicationId,80)
+    const application=await db.prepare('SELECT a.applicant_email,a.applicant_name,e.title AS event_title FROM volunteer_applications a JOIN organization_events e ON e.id=a.event_id WHERE a.id=? AND a.organization_id=?').bind(applicationId,organization.id).first()
+    await db.prepare('UPDATE volunteer_applications SET status=?,updated_at=? WHERE id=? AND organization_id=?').bind(status,now,applicationId,organization.id).run()
+    // See P1-01 - only 'accepted'/'declined' actually notify (sendApplicationStatusUpdate no-ops for 'shortlisted').
+    if(application)await sendApplicationStatusUpdate({to:application.applicant_email,name:application.applicant_name,eventTitle:application.event_title,organizationName:organization.name,status})
+    return Response.json({ok:true})
   }
   if(action==='addEmailDomain'){
     const domain=clean(body.domain,120).toLowerCase()
