@@ -1,5 +1,6 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
+import { currentOccurrence } from '../../lib/recurrence.js'
 
 const parse=value=>{try{return JSON.parse(value||'[]')}catch{return[]}}
 const area=postcode=>String(postcode||'').toUpperCase().replace(/\s/g,'').slice(0,3)
@@ -22,16 +23,18 @@ export async function GET(){
     for(const row of rows.results??[])(friendMap[row.event_id]??=[]).push(row.display_name)
   }
   const interests=parse(profile?.interests).map(x=>String(x).toLowerCase()),userArea=area(profile?.postcode)
-  const ranked=(events.results??[]).map(e=>{const interestMatch=interests.some(i=>i.includes(String(e.interest).toLowerCase())||String(e.interest).toLowerCase().includes(i.split(' ')[0]));const nearby=!!userArea&&area(e.postcode)===userArea;const friendNames=friendMap[e.id]??[];return {...e,interestMatch,nearby,friendNames,score:(interestMatch?4:0)+(nearby?3:0)+(friendNames.length?2:0)}}).sort((a,b)=>b.score-a.score||String(a.start_at).localeCompare(String(b.start_at)))
+  const occurrenced=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,start_at:occ.startAt,end_at:occ.endAt}})
+  const ranked=occurrenced.map(e=>{const interestMatch=interests.some(i=>i.includes(String(e.interest).toLowerCase())||String(e.interest).toLowerCase().includes(i.split(' ')[0]));const nearby=!!userArea&&area(e.postcode)===userArea;const friendNames=friendMap[e.id]??[];return {...e,interestMatch,nearby,friendNames,score:(interestMatch?4:0)+(nearby?3:0)+(friendNames.length?2:0)}}).sort((a,b)=>b.score-a.score||String(a.start_at).localeCompare(String(b.start_at)))
   return Response.json({profile:{interests:parse(profile?.interests),postcode:profile?.postcode||''},opportunities:ranked})
 }
 
 export async function POST(request){
   const user=await getUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
-  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT e.id,e.organization_id,e.event_type,e.start_at,e.end_at FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.id=? AND e.status='published' AND o.status='approved'").bind(String(eventId||'')).first()
+  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT e.id,e.organization_id,e.event_type,e.start_at,e.end_at,e.recurrence FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.id=? AND e.status='published' AND o.status='approved'").bind(String(eventId||'')).first()
   if(!event)return Response.json({error:'Opportunity not found.'},{status:404})
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||!/^\d{2}:\d{2}$/.test(String(time||'')))return Response.json({error:'Choose a valid date and time slot.'},{status:400})
-  const chosen=new Date(`${date}T${time}`),start=new Date(event.start_at),end=new Date(event.end_at)
+  const occ=currentOccurrence(event.start_at,event.end_at,event.recurrence)
+  const chosen=new Date(`${date}T${time}`),start=new Date(occ.startAt),end=new Date(occ.endAt)
   if(Number.isNaN(chosen.getTime())||chosen<new Date(start.toISOString().slice(0,10)+'T00:00')||chosen>new Date(end.toISOString().slice(0,10)+'T23:59'))return Response.json({error:'That slot is outside the event dates.'},{status:400})
   const now=new Date().toISOString()
   if(event.event_type==='volunteering'){
