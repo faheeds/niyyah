@@ -1,5 +1,6 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
+import { moderationIssue } from '../../lib/content-filter.js'
 
 const clean = (value, max = 200) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
@@ -35,6 +36,8 @@ export async function PUT(request) {
   const body = await request.json()
   const displayName=clean(body.displayName,80), interests=Array.isArray(body.interests)?body.interests.map(v=>clean(v,40)).filter(Boolean).slice(0,8):[]
   if(!displayName) return Response.json({error:'A display name is required.'},{status:400})
+  const contentIssue=moderationIssue(displayName)||moderationIssue(body.bio)
+  if(contentIssue) return Response.json({error:contentIssue},{status:400})
   const db=await prepareCommunityTables(), now=new Date().toISOString()
   await db.prepare(`INSERT INTO member_profiles (user_id,email,display_name,bio,postcode,interests,instagram,tiktok,other_social,discoverable,share_activity,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,display_name=excluded.display_name,bio=excluded.bio,postcode=excluded.postcode,interests=excluded.interests,instagram=excluded.instagram,tiktok=excluded.tiktok,other_social=excluded.other_social,discoverable=excluded.discoverable,share_activity=excluded.share_activity,updated_at=excluded.updated_at`)

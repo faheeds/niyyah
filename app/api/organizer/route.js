@@ -2,6 +2,7 @@ import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 import { resolveOrganizationAccess } from '../../org-admins.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
+import { moderationIssue } from '../../lib/content-filter.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -64,6 +65,8 @@ export async function POST(request){
     // settings are owner/admin, never staff.
     if(organization&&!canManageOrg(role))return Response.json({error:'Only an owner or admin can edit organization settings.'},{status:403})
     if(requiredOrganization.some(key=>!clean(body[key],key==='description'?800:160)))return Response.json({error:'Complete all required organization details.'},{status:400})
+    const orgContentIssue=moderationIssue(body.name)||moderationIssue(body.description)||moderationIssue(body.safeguardingName)
+    if(orgContentIssue)return Response.json({error:orgContentIssue},{status:400})
     const id=organization?.id||crypto.randomUUID()
     // Edit stays tied to whoever actually created the organization, even
     // when an admin (not the owner) is the one saving the form.
@@ -82,6 +85,8 @@ export async function POST(request){
     const fields=['title','summary','interest','ageRange','locationName','address','postcode','startAt','endAt']
     const labels={title:'event name',summary:'description',interest:'interest',ageRange:'age range',locationName:'venue',address:'address',postcode:'postcode',startAt:'start date and time',endAt:'end date and time'},missing=fields.filter(key=>!clean(body[key],key==='summary'?600:200))
     if(missing.length)return Response.json({error:`Please complete: ${missing.map(key=>labels[key]).join(', ')}.`},{status:400})
+    const eventContentIssue=moderationIssue(body.title)||moderationIssue(body.summary)
+    if(eventContentIssue)return Response.json({error:eventContentIssue},{status:400})
     const datePattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,startAt=clean(body.startAt,40).slice(0,16),endAt=clean(body.endAt,40).slice(0,16),start=new Date(startAt),end=new Date(endAt)
     if(!datePattern.test(startAt)||!datePattern.test(endAt)||Number.isNaN(start.getTime())||Number.isNaN(end.getTime()))return Response.json({error:'Choose a valid start and end date with a time.'},{status:400})
     if(end<=start)return Response.json({error:'The event must end after it starts.'},{status:400})
