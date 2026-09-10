@@ -314,10 +314,3 @@ export async function prepareCommunityTables() {
   communityTablesReady = true
   return db
 }
-
-// TEMPORARY - read by app/api/_diag/route.js so it can report whether each
-// bootstrap ran or returned from cache, instead of leaving that ambiguous.
-// Removed alongside that route.
-export function diagReadiness() {
-  return { membersTablesReady, authTablesReady, communityTablesReady }
-}
