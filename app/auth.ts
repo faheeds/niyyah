@@ -5,7 +5,7 @@ import { prepareAuthTables } from '../db/index.js'
 // Real sign-in for Niyyah, replacing the old ChatGPT-hosted-only adapter (see
 // CLAUDE_HANDOFF.md). Accounts and sessions live in D1 (see prepareAuthTables
 // in db/index.js); identity comes from either a Google sign-in or an email +
-// password the person set themselves — never from a trusted header again.
+// password the person set themselves â€” never from a trusted header again.
 
 export type NiyyahUser = { userId: string; displayName: string; email: string; fullName: string | null; emailVerified: boolean }
 
