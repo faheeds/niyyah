@@ -1,7 +1,25 @@
 import { env } from 'cloudflare:workers'
 
+// Each prepare*Tables() function re-runs its full CREATE TABLE/INDEX IF NOT
+// EXISTS list on every call, and every route that touches the database calls
+// one of these on every request - that batch has grown from a handful of
+// statements to ~35 (organization_email_domains/organization_members/
+// organization_admins and their indexes, added across the roster and
+// multi-admin PRs) without anyone noticing, because it's cheap in isolation.
+// Combined with a request that also does real work - PBKDF2 password hashing
+// on sign-up/sign-in chief among them - it was enough to blow Workers' CPU
+// time limit, which surfaces only as a generic 500 (the catch block in every
+// route swallows the real error). These module-level flags make the bootstrap
+// batch run once per isolate instead of once per request - a cold start still
+// creates anything missing, but a warm isolate (the overwhelming majority of
+// requests) skips 35 no-op statements it already knows succeeded.
+let membersTablesReady = false
+let authTablesReady = false
+let communityTablesReady = false
+
 export async function prepareMembersTable() {
   const db = env.DB
+  if (membersTablesReady) return db
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS community_members (
       id TEXT PRIMARY KEY NOT NULL,
@@ -41,11 +59,13 @@ export async function prepareMembersTable() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_referrals_inviter_status ON volunteer_referrals(inviter_user_id,status)'),
   ])
   await db.prepare('PRAGMA optimize').run()
+  membersTablesReady = true
   return db
 }
 
 export async function prepareAuthTables() {
   const db = env.DB
+  if (authTablesReady) return db
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY NOT NULL,
@@ -67,11 +87,13 @@ export async function prepareAuthTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
   ])
   await db.prepare('PRAGMA optimize').run()
+  authTablesReady = true
   return db
 }
 
 export async function prepareCommunityTables() {
   const db = env.DB
+  if (communityTablesReady) return db
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS community_members (
       id TEXT PRIMARY KEY NOT NULL,
@@ -289,5 +311,6 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_org_admins_token ON organization_admins(invite_token)'),
   ])
   await db.prepare('PRAGMA optimize').run()
+  communityTablesReady = true
   return db
 }
