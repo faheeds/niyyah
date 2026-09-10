@@ -11,6 +11,7 @@
   "dependencies": {
     "@openai/sites-vite-plugin": "0.2.0",
     "@vitejs/plugin-react": "latest",
+    "bad-words": "^4.1.5",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "latest",
     "react": "19.2.6",
