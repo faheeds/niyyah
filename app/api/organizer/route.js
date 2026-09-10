@@ -1,16 +1,20 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
+import { resolveOrganizationAccess } from '../../org-admins.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
-
-async function ownedOrganization(db,userId){return db.prepare('SELECT * FROM organizations WHERE owner_user_id = ?').bind(userId).first()}
+// Owner and admin can edit events, applications, hour reviews and the email
+// domain list; staff is limited to roster/hours approval (see the action
+// gates in POST below). Admin management itself is owner-only.
+const canManageOrg=role=>role==='owner'||role==='admin'
 
 export async function GET(){
   const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
-  const db=await prepareCommunityTables(), organization=await ownedOrganization(db,user.userId)
-  if(!organization)return Response.json({organization:null,events:[],hours:[],applications:[],members:[],emailDomains:[]})
-  const [events,hours,applications,members,emailDomains]=await Promise.all([
+  const db=await prepareCommunityTables()
+  const {organization,role}=await resolveOrganizationAccess(db,user.userId)
+  if(!organization)return Response.json({organization:null,role:null,events:[],hours:[],applications:[],members:[],emailDomains:[],admins:[]})
+  const [events,hours,applications,members,emailDomains,admins]=await Promise.all([
     db.prepare(`SELECT e.*,v.compensation_type,v.pay_details,r.gender_appropriateness,r.location_preference,r.travel_required,r.volunteers_needed,r.auto_pause,r.preferred_interests,r.notes,
       (SELECT COUNT(*) FROM volunteer_applications a WHERE a.event_id=e.id AND a.status!='declined') AS signup_count,
       (SELECT COUNT(*) FROM volunteer_applications a WHERE a.event_id=e.id AND a.status='accepted') AS accepted_count
@@ -31,24 +35,38 @@ export async function GET(){
       WHERE a.organization_id=? ORDER BY CASE a.status WHEN 'new' THEN 0 ELSE 1 END,a.created_at DESC`).bind(organization.id).all(),
     db.prepare(`SELECT id,email,display_name,tag,status,source,created_at FROM organization_members WHERE organization_id=? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
     db.prepare('SELECT domain FROM organization_email_domains WHERE organization_id=? ORDER BY domain').bind(organization.id).all(),
+    db.prepare(`SELECT id,email,display_name,role,status,created_at FROM organization_admins WHERE organization_id=? ORDER BY CASE status WHEN 'invited' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
   ])
   const ranked=(applications.results??[]).map(a=>{let score=45;const interests=(()=>{try{return JSON.parse(a.interests||'[]')}catch{return[]}})().map(x=>String(x).toLowerCase());if(interests.some(x=>x.includes(String(a.event_interest||'').toLowerCase())))score+=25;if(a.volunteer_postcode&&String(a.volunteer_postcode).replace(/\s/g,'').slice(0,3).toLowerCase()===String(a.event_postcode).replace(/\s/g,'').slice(0,3).toLowerCase())score+=15;score+=Math.min(15,Math.floor(Number(a.verified_hours||0)/5));return {...a,match_score:Math.min(100,score)}}).sort((a,b)=>b.match_score-a.match_score||String(a.created_at).localeCompare(String(b.created_at)))
-  return Response.json({organization,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[]})
+  return Response.json({organization,role,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:admins.results??[]})
 }
 
 export async function POST(request){
   const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const body=await request.json(), action=clean(body.action,30), db=await prepareCommunityTables(), now=new Date().toISOString()
-  let organization=await ownedOrganization(db,user.userId)
+  const {organization:existingAccess,role}=await resolveOrganizationAccess(db,user.userId)
+  let organization=existingAccess
   if(action==='saveOrganization'){
+    // A brand-new organization (organization===null) can only be reached by
+    // its future owner - staff/admin only ever exist tied to an org that
+    // already has one. So the only real gate here is: an existing org's
+    // settings are owner/admin, never staff.
+    if(organization&&!canManageOrg(role))return Response.json({error:'Only an owner or admin can edit organization settings.'},{status:403})
     if(requiredOrganization.some(key=>!clean(body[key],key==='description'?800:160)))return Response.json({error:'Complete all required organization details.'},{status:400})
     const id=organization?.id||crypto.randomUUID()
+    // Edit stays tied to whoever actually created the organization, even
+    // when an admin (not the owner) is the one saving the form.
+    const ownerUserId=organization?.owner_user_id||user.userId
     await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,status,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,updated_at=excluded.updated_at`)
-      .bind(id,user.userId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),organization?.status||'pending',organization?.created_at||now,now).run()
+      .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),organization?.status||'pending',organization?.created_at||now,now).run()
     return Response.json({ok:true})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})
+  if(['saveEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain'].includes(action)&&!canManageOrg(role))
+    return Response.json({error:'You do not have permission to do that.'},{status:403})
+  if(['inviteAdmin','updateAdminRole','removeAdmin'].includes(action)&&role!=='owner')
+    return Response.json({error:'Only the organization owner can manage admins.'},{status:403})
   if(action==='saveEvent'){
     const fields=['title','summary','interest','ageRange','locationName','address','postcode','startAt','endAt']
     const labels={title:'event name',summary:'description',interest:'interest',ageRange:'age range',locationName:'venue',address:'address',postcode:'postcode',startAt:'start date and time',endAt:'end date and time'},missing=fields.filter(key=>!clean(body[key],key==='summary'?600:200))
@@ -110,6 +128,29 @@ export async function POST(request){
     }else{
       await db.prepare('DELETE FROM organization_members WHERE id=? AND organization_id=?').bind(membershipId,organization.id).run()
     }
+    return Response.json({ok:true})
+  }
+  if(action==='inviteAdmin'){
+    const email=clean(body.email,160).toLowerCase()
+    if(!/^\S+@\S+\.\S+$/.test(email))return Response.json({error:'Enter a valid email address.'},{status:400})
+    if(email===String(user.email||'').toLowerCase())return Response.json({error:"You're already the owner."},{status:400})
+    const inviteRole=body.role==='admin'?'admin':'staff'
+    // An invite always names one specific address someone typed - there's
+    // no domain-style guesswork here, so it's safe to link immediately if
+    // that address already has an account, or wait for their next sign-in
+    // (see claimAdminInvites in app/org-admins.js) if it doesn't yet.
+    await db.prepare(`INSERT INTO organization_admins (id,organization_id,user_id,email,display_name,role,status,invited_by_user_id,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,email) DO UPDATE SET role=excluded.role,updated_at=excluded.updated_at`)
+      .bind(crypto.randomUUID(),organization.id,null,email,clean(body.displayName,120)||null,inviteRole,'invited',user.userId,now,now).run()
+    return Response.json({ok:true})
+  }
+  if(action==='updateAdminRole'){
+    const newRole=body.role==='admin'?'admin':'staff'
+    await db.prepare("UPDATE organization_admins SET role=?,updated_at=? WHERE id=? AND organization_id=?").bind(newRole,now,clean(body.adminId,80),organization.id).run()
+    return Response.json({ok:true})
+  }
+  if(action==='removeAdmin'){
+    await db.prepare('DELETE FROM organization_admins WHERE id=? AND organization_id=?').bind(clean(body.adminId,80),organization.id).run()
     return Response.json({ok:true})
   }
   return Response.json({error:'Unknown action.'},{status:400})

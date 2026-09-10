@@ -165,6 +165,19 @@ export async function prepareCommunityTables() {
       updated_at TEXT NOT NULL,
       UNIQUE(organization_id, user_id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS organization_admins (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL,
+      user_id TEXT,
+      email TEXT NOT NULL,
+      display_name TEXT,
+      role TEXT NOT NULL DEFAULT 'staff',
+      status TEXT NOT NULL DEFAULT 'invited',
+      invited_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(organization_id, email)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS organization_events (
       id TEXT PRIMARY KEY NOT NULL,
       organization_id TEXT NOT NULL,
@@ -269,6 +282,9 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_domains_domain ON organization_email_domains(domain)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_members_org_status ON organization_members(organization_id,status)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_org ON organization_admins(organization_id,status)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_user ON organization_admins(user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_email ON organization_admins(email)'),
   ])
   await db.prepare('PRAGMA optimize').run()
   return db

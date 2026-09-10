@@ -2,6 +2,7 @@ import { prepareAuthTables } from '../../../../db/index.js'
 import { hashPassword, createSession, sessionCookieHeader } from '../../../auth.ts'
 import { ADMIN_EMAILS } from '../../../admin-emails.js'
 import { autoEnrollBySchoolEmail } from '../../../org-membership.js'
+import { claimAdminInvites } from '../../../org-admins.js'
 
 const clean = (value, max = 200) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
@@ -25,6 +26,7 @@ export async function POST(request) {
     await db.prepare('INSERT INTO accounts (id,email,display_name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)')
       .bind(id, email, displayName, hash, salt, now, now).run()
     await autoEnrollBySchoolEmail(id, email, displayName, false)
+    await claimAdminInvites(id, email)
 
     const token = await createSession(id)
     return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookieHeader(token) } })

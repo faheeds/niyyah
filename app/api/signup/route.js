@@ -2,6 +2,7 @@ import { prepareMembersTable, prepareAuthTables } from '../../../db/index.js'
 import { hashPassword, createSession, sessionCookieHeader } from '../../auth.ts'
 import { ADMIN_EMAILS } from '../../admin-emails.js'
 import { autoEnrollBySchoolEmail } from '../../org-membership.js'
+import { claimAdminInvites } from '../../org-admins.js'
 
 const allowedAgeGroups = new Set(['13–15', '16–17', '18–24', '25–34', '35+'])
 const allowedContacts = new Set(['Email', 'Text message', 'WhatsApp'])
@@ -64,6 +65,7 @@ export async function POST(request) {
       // else's account). email is self-asserted here, so this lands
       // 'pending' rather than an auto-approval. See app/org-membership.js.
       await autoEnrollBySchoolEmail(accountId, email, displayName, false)
+      await claimAdminInvites(accountId, email)
     }
 
     const db = await prepareMembersTable()
