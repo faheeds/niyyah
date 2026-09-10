@@ -8,7 +8,7 @@ const area=postcode=>String(postcode||'').toUpperCase().replace(/\s/g,'').slice(
 export async function GET(){
   const user=await getUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const db=await prepareCommunityTables(),profile=await db.prepare('SELECT interests,postcode FROM member_profiles WHERE user_id=?').bind(user.userId).first()
-  const events=await db.prepare(`SELECT e.*,o.name AS organization_name,v.compensation_type,v.pay_details,s.selected_date,s.selected_time,
+  const events=await db.prepare(`SELECT e.*,o.name AS organization_name,o.safeguarding_name,o.safeguarding_email,v.compensation_type,v.pay_details,s.selected_date,s.selected_time,
     CASE WHEN va.user_id IS NOT NULL OR ep.user_id IS NOT NULL THEN 1 ELSE 0 END AS joined
     FROM organization_events e JOIN organizations o ON o.id=e.organization_id
     LEFT JOIN volunteer_opportunities v ON v.event_id=e.id
