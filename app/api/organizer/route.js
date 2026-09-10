@@ -9,8 +9,8 @@ async function ownedOrganization(db,userId){return db.prepare('SELECT * FROM org
 export async function GET(){
   const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
   const db=await prepareCommunityTables(), organization=await ownedOrganization(db,user.userId)
-  if(!organization)return Response.json({organization:null,events:[],hours:[],applications:[]})
-  const [events,hours,applications]=await Promise.all([
+  if(!organization)return Response.json({organization:null,events:[],hours:[],applications:[],members:[],emailDomains:[]})
+  const [events,hours,applications,members,emailDomains]=await Promise.all([
     db.prepare(`SELECT e.*,v.compensation_type,v.pay_details,r.gender_appropriateness,r.location_preference,r.travel_required,r.volunteers_needed,r.auto_pause,r.preferred_interests,r.notes,
       (SELECT COUNT(*) FROM volunteer_applications a WHERE a.event_id=e.id AND a.status!='declined') AS signup_count,
       (SELECT COUNT(*) FROM volunteer_applications a WHERE a.event_id=e.id AND a.status='accepted') AS accepted_count
@@ -28,10 +28,12 @@ export async function GET(){
       LEFT JOIN member_profiles p ON p.user_id=a.user_id LEFT JOIN community_members cm ON lower(cm.email)=lower(a.applicant_email)
       LEFT JOIN event_signup_slots s ON s.event_id=a.event_id AND s.user_id=a.user_id
       LEFT JOIN event_volunteer_requirements r ON r.event_id=a.event_id
-      WHERE a.organization_id=? ORDER BY CASE a.status WHEN 'new' THEN 0 ELSE 1 END,a.created_at DESC`).bind(organization.id).all()
+      WHERE a.organization_id=? ORDER BY CASE a.status WHEN 'new' THEN 0 ELSE 1 END,a.created_at DESC`).bind(organization.id).all(),
+    db.prepare(`SELECT id,email,display_name,tag,status,source,created_at FROM organization_members WHERE organization_id=? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
+    db.prepare('SELECT domain FROM organization_email_domains WHERE organization_id=? ORDER BY domain').bind(organization.id).all(),
   ])
   const ranked=(applications.results??[]).map(a=>{let score=45;const interests=(()=>{try{return JSON.parse(a.interests||'[]')}catch{return[]}})().map(x=>String(x).toLowerCase());if(interests.some(x=>x.includes(String(a.event_interest||'').toLowerCase())))score+=25;if(a.volunteer_postcode&&String(a.volunteer_postcode).replace(/\s/g,'').slice(0,3).toLowerCase()===String(a.event_postcode).replace(/\s/g,'').slice(0,3).toLowerCase())score+=15;score+=Math.min(15,Math.floor(Number(a.verified_hours||0)/5));return {...a,match_score:Math.min(100,score)}}).sort((a,b)=>b.match_score-a.match_score||String(a.created_at).localeCompare(String(b.created_at)))
-  return Response.json({organization,events:events.results??[],hours:hours.results??[],applications:ranked})
+  return Response.json({organization,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[]})
 }
 
 export async function POST(request){
@@ -82,6 +84,33 @@ export async function POST(request){
   if(action==='reviewApplication'){
     const status=['shortlisted','accepted','declined'].includes(body.status)?body.status:null;if(!status)return Response.json({error:'Invalid application status.'},{status:400})
     await db.prepare('UPDATE volunteer_applications SET status=?,updated_at=? WHERE id=? AND organization_id=?').bind(status,now,clean(body.applicationId,80),organization.id).run();return Response.json({ok:true})
+  }
+  if(action==='addEmailDomain'){
+    const domain=clean(body.domain,120).toLowerCase()
+    if(!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain))return Response.json({error:'Enter a valid domain, like medinaacademy.org.'},{status:400})
+    await db.prepare('INSERT INTO organization_email_domains (id,organization_id,domain,created_at) VALUES (?,?,?,?) ON CONFLICT(organization_id,domain) DO NOTHING').bind(crypto.randomUUID(),organization.id,domain,now).run()
+    return Response.json({ok:true})
+  }
+  if(action==='removeEmailDomain'){
+    await db.prepare('DELETE FROM organization_email_domains WHERE organization_id=? AND domain=?').bind(organization.id,clean(body.domain,120).toLowerCase()).run()
+    return Response.json({ok:true})
+  }
+  if(action==='approveMember'){
+    await db.prepare("UPDATE organization_members SET status='approved',updated_at=? WHERE id=? AND organization_id=?").bind(now,clean(body.membershipId,80),organization.id).run()
+    return Response.json({ok:true})
+  }
+  if(action==='removeMember'){
+    const membershipId=clean(body.membershipId,80)
+    const member=await db.prepare('SELECT source FROM organization_members WHERE id=? AND organization_id=?').bind(membershipId,organization.id).first()
+    if(member?.source==='school_email'){
+      // Auto-enrollment re-runs on every sign-in and ON CONFLICT DO NOTHING
+      // only skips rows that still exist, so a hard delete here would let
+      // the student silently reappear, approved, on their next sign-in.
+      await db.prepare("UPDATE organization_members SET status='removed',updated_at=? WHERE id=? AND organization_id=?").bind(now,membershipId,organization.id).run()
+    }else{
+      await db.prepare('DELETE FROM organization_members WHERE id=? AND organization_id=?').bind(membershipId,organization.id).run()
+    }
+    return Response.json({ok:true})
   }
   return Response.json({error:'Unknown action.'},{status:400})
 }

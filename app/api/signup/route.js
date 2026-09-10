@@ -1,6 +1,7 @@
 import { prepareMembersTable, prepareAuthTables } from '../../../db/index.js'
 import { hashPassword, createSession, sessionCookieHeader } from '../../auth.ts'
 import { ADMIN_EMAILS } from '../../admin-emails.js'
+import { autoEnrollBySchoolEmail } from '../../org-membership.js'
 
 const allowedAgeGroups = new Set(['13–15', '16–17', '18–24', '25–34', '35+'])
 const allowedContacts = new Set(['Email', 'Text message', 'WhatsApp'])
@@ -56,6 +57,13 @@ export async function POST(request) {
       await authDb.prepare('INSERT INTO accounts (id,email,display_name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)')
         .bind(accountId, email, displayName, hash, salt, now, now).run()
       sessionCookie = sessionCookieHeader(await createSession(accountId))
+      // Only runs for the account actually being created on this request -
+      // never against an existingAccount, since this route deliberately
+      // never authenticates the submitter in that case (see the comment
+      // above about not letting a different password log into someone
+      // else's account). email is self-asserted here, so this lands
+      // 'pending' rather than an auto-approval. See app/org-membership.js.
+      await autoEnrollBySchoolEmail(accountId, email, displayName, false)
     }
 
     const db = await prepareMembersTable()

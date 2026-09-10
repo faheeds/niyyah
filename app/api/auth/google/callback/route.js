@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers'
 import { prepareAuthTables } from '../../../../../db/index.js'
 import { readCookie, createSession, sessionCookieHeader } from '../../../../auth.ts'
+import { autoEnrollBySchoolEmail } from '../../../../org-membership.js'
 
 const clearOauthCookies = [
   'niyyah_oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
@@ -75,6 +76,11 @@ export async function GET(request) {
       account = { id }
     }
   }
+
+  // Runs on every Google sign-in, new account or returning - lets a student
+  // get swept onto their school's roster even if it registered its domain
+  // after this account already existed. See app/org-membership.js.
+  await autoEnrollBySchoolEmail(account.id, email, claims.name || email, true)
 
   const token = await createSession(account.id)
   const responseHeaders = new Headers()
