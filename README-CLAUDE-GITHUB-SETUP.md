@@ -88,6 +88,19 @@ The app has its own standalone login (`app/auth.ts`): email+password works immed
    - `GOOGLE_CLIENT_SECRET` must be encrypted: either the same Variables screen with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah-community-staging` (repeat with `--name niyyah-community` for production once that Worker exists).
 3. That's it — until these are set, the "Continue with Google" button shows a plain "Google sign-in is not set up yet" message instead of erroring, and email+password sign-in/sign-up keeps working normally.
 
+## 6a. Email notifications (optional — everything else works without it)
+
+P1-01: confirmation emails when someone signs up for an event or volunteering opportunity, and a message when an organizer accepts or declines a volunteer application (`app/lib/notify.js`). Sent through [Resend](https://resend.com) — a transactional-email API that needs no SMTP setup, with a free tier that covers a small community easily.
+
+1. **Create a Resend account** at [resend.com](https://resend.com) and grab an **API key** from the dashboard (Settings → API Keys → Create API Key).
+   - Sending from your own domain needs that domain verified in Resend (Domains → Add Domain, then add the DNS records it shows you). Until you do that, Resend's shared `onboarding@resend.dev` sender works fine for testing.
+2. **Add the key to Cloudflare**, not GitHub Actions — same pattern as Google sign-in above, the Worker reads it at request time via `env`, not at build time:
+   - `RESEND_API_KEY` must be encrypted: `npx wrangler secret put RESEND_API_KEY --name niyyah-community-staging` (repeat with `--name niyyah-community` for production once that Worker exists), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
+   - `RESEND_FROM_ADDRESS` is optional and can be a plain variable (e.g. `Niyyah <notifications@yourdomain.org>`) — without it, sends use `Niyyah <notifications@niyyah.app>`, which will fail at Resend unless that address's domain is one you've verified there. Set this once you have a verified sending domain.
+3. That's it — until `RESEND_API_KEY` is set, sign-ups and application reviews keep working exactly as before, just without the email (`app/lib/notify.js` logs and no-ops instead of erroring).
+
+Event reminders ("a reminder before an event", the third piece of P1-01) need a scheduled job, not just a request-time send, so they're intentionally out of scope here — see the `p1-01b-event-reminders` backlog item for that follow-up.
+
 ## 7. Bootstrapping the first admin account
 
 `/admin` (approving organizations) is gated on `app/admin-emails.js` — `ADMIN_EMAILS.includes(user.email)`, nothing else. Both public sign-up routes refuse to register any address on that list (so nobody can squat it with a password account), which means the admin account itself can't be created through the normal `/signup` or `/signin` forms either. Create it directly in D1 once, right after your first deploy:
