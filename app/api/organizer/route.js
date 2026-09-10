@@ -1,6 +1,7 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 import { resolveOrganizationAccess } from '../../org-admins.js'
+import { currentOccurrence } from '../../lib/recurrence.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -41,7 +42,14 @@ export async function GET(){
   // Only the owner can act on the admin roster (see the action gates in
   // POST below), so only the owner receives it - staff/admin never see
   // teammates' emails or a still-live invite token over the wire.
-  return Response.json({organization,role,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
+  // Keep start_at/end_at as the true anchor (editEvent in organizer-client.jsx
+  // pre-fills the edit form from it - shifting it here would walk a weekly
+  // event's date forward by a week on every save). Display/list logic gets
+  // the current-or-next occurrence as separate next_start_at/next_end_at
+  // fields instead - see P1-02 review feedback on PR for organizer-client.jsx
+  // staleness in both the upcoming/past split and the event list label.
+  const eventsWithOccurrence=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,next_start_at:occ.startAt,next_end_at:occ.endAt}})
+  return Response.json({organization,role,events:eventsWithOccurrence,hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
 }
 
 export async function POST(request){
