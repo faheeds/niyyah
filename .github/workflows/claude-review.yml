@@ -34,7 +34,14 @@ jobs:
       - name: Claude review + auto-merge
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Authenticates via a Claude Code OAuth token (generated with
+          # `claude setup-token` from a Claude Pro/Max subscription) instead
+          # of a pay-as-you-go anthropic_api_key. That draws review runs
+          # from the subscription's included usage instead of a separate
+          # Console API credit balance, which otherwise silently runs dry
+          # and fails every review with "Credit balance is too low" until
+          # someone notices and tops it up.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # No github_token here on purpose: leaving it unset means this
           # action authenticates as the Claude GitHub App instead of the
           # default GITHUB_TOKEN. That matters if Claude ever pushes a
