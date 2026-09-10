@@ -92,13 +92,13 @@ The app has its own standalone login (`app/auth.ts`): email+password works immed
 
 `/admin` (approving organizations) is gated on `app/admin-emails.js` — `ADMIN_EMAILS.includes(user.email)`, nothing else. Both public sign-up routes refuse to register any address on that list (so nobody can squat it with a password account), which means the admin account itself can't be created through the normal `/signup` or `/signin` forms either. Create it directly in D1 once, right after your first deploy:
 
-1. Pick a password, then compute its hash the same way `app/auth.ts` does (PBKDF2-SHA256, 120,000 iterations) — run this with Node 18+ on your machine:
+1. Pick a password, then compute its hash the same way `app/auth.ts` does (PBKDF2-SHA256, 100,000 iterations (Cloudflare Workers' hard ceiling for PBKDF2 -- app/auth.ts cannot go higher; do not "fix" this back up to OWASP's 600k guidance)) — run this with Node 18+ on your machine:
    ```bash
    node -e "
    const password = 'choose-a-real-password-here';
    crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']).then(async key => {
      const salt = crypto.getRandomValues(new Uint8Array(16));
-     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
+     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
      const b64 = (bytes) => Buffer.from(bytes).toString('base64');
      console.log('password_hash:', b64(new Uint8Array(bits)));
      console.log('password_salt:', b64(salt));
