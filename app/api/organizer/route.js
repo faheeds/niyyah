@@ -1,6 +1,7 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 import { resolveOrganizationAccess } from '../../org-admins.js'
+import { currentOccurrence } from '../../lib/recurrence.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -41,7 +42,14 @@ export async function GET(){
   // Only the owner can act on the admin roster (see the action gates in
   // POST below), so only the owner receives it - staff/admin never see
   // teammates' emails or a still-live invite token over the wire.
-  return Response.json({organization,role,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
+  // Keep start_at/end_at as the true anchor (editEvent in organizer-client.jsx
+  // pre-fills the edit form from it - shifting it here would walk a weekly
+  // event's date forward by a week on every save). Display/list logic gets
+  // the current-or-next occurrence as separate next_start_at/next_end_at
+  // fields instead - see P1-02 review feedback on PR for organizer-client.jsx
+  // staleness in both the upcoming/past split and the event list label.
+  const eventsWithOccurrence=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,next_start_at:occ.startAt,next_end_at:occ.endAt}})
+  return Response.json({organization,role,events:eventsWithOccurrence,hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
 }
 
 export async function POST(request){
@@ -79,9 +87,12 @@ export async function POST(request){
     if(end<=start)return Response.json({error:'The event must end after it starts.'},{status:400})
     const id=clean(body.id,80)||crypto.randomUUID(), existing=body.id?await db.prepare('SELECT id,created_at FROM organization_events WHERE id=? AND organization_id=?').bind(id,organization.id).first():null
     if(body.id&&!existing)return Response.json({error:'Event not found.'},{status:404})
-    await db.prepare(`INSERT INTO organization_events (id,organization_id,title,summary,interest,age_range,location_name,address,postcode,start_at,end_at,capacity,event_type,status,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,summary=excluded.summary,interest=excluded.interest,age_range=excluded.age_range,location_name=excluded.location_name,address=excluded.address,postcode=excluded.postcode,start_at=excluded.start_at,end_at=excluded.end_at,capacity=excluded.capacity,event_type=excluded.event_type,status=excluded.status,updated_at=excluded.updated_at`)
-      .bind(id,organization.id,clean(body.title,160),clean(body.summary,600),clean(body.interest,80),clean(body.ageRange,60),clean(body.locationName,160),clean(body.address,240),clean(body.postcode,20),startAt,endAt,body.capacity?Math.max(1,Math.min(10000,Number(body.capacity))):null,clean(body.eventType,30)||'community',['draft','published'].includes(body.status)?body.status:'draft',existing?.created_at||now,now).run()
+    // Only 'weekly' is a supported recurrence today (see P1-02 / app/lib/recurrence.js) - anything else, including
+    // absent, is a one-time event. Never trust an arbitrary client-supplied string into this column.
+    const recurrence=body.recurrence==='weekly'?'weekly':null
+    await db.prepare(`INSERT INTO organization_events (id,organization_id,title,summary,interest,age_range,location_name,address,postcode,start_at,end_at,capacity,event_type,status,recurrence,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,summary=excluded.summary,interest=excluded.interest,age_range=excluded.age_range,location_name=excluded.location_name,address=excluded.address,postcode=excluded.postcode,start_at=excluded.start_at,end_at=excluded.end_at,capacity=excluded.capacity,event_type=excluded.event_type,status=excluded.status,recurrence=excluded.recurrence,updated_at=excluded.updated_at`)
+      .bind(id,organization.id,clean(body.title,160),clean(body.summary,600),clean(body.interest,80),clean(body.ageRange,60),clean(body.locationName,160),clean(body.address,240),clean(body.postcode,20),startAt,endAt,body.capacity?Math.max(1,Math.min(10000,Number(body.capacity))):null,clean(body.eventType,30)||'community',['draft','published'].includes(body.status)?body.status:'draft',recurrence,existing?.created_at||now,now).run()
     if(body.eventType==='volunteering')await db.prepare(`INSERT INTO volunteer_opportunities (event_id,compensation_type,pay_details,created_at,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET compensation_type=excluded.compensation_type,pay_details=excluded.pay_details,updated_at=excluded.updated_at`).bind(id,body.compensationType==='paid'?'paid':'unpaid',clean(body.payDetails,200)||null,now,now).run()
     if(body.eventType==='volunteering')await db.prepare(`INSERT INTO event_volunteer_requirements (event_id,gender_appropriateness,location_preference,travel_required,volunteers_needed,auto_pause,preferred_interests,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET gender_appropriateness=excluded.gender_appropriateness,location_preference=excluded.location_preference,travel_required=excluded.travel_required,volunteers_needed=excluded.volunteers_needed,auto_pause=excluded.auto_pause,preferred_interests=excluded.preferred_interests,notes=excluded.notes,updated_at=excluded.updated_at`).bind(id,clean(body.genderAppropriateness,80)||'Any gender',clean(body.locationPreference,120)||null,body.travelRequired?1:0,Math.max(1,Math.min(10000,Number(body.volunteersNeeded)||1)),body.autoPause?1:0,clean(body.preferredInterests,240)||null,clean(body.volunteerNotes,500)||null,now,now).run()
     return Response.json({ok:true})

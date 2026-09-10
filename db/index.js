@@ -216,6 +216,7 @@ export async function prepareCommunityTables() {
       capacity INTEGER,
       event_type TEXT NOT NULL DEFAULT 'community',
       status TEXT NOT NULL DEFAULT 'draft',
+      recurrence TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`),
@@ -310,6 +311,17 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_email ON organization_admins(email)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_org_admins_token ON organization_admins(invite_token)'),
   ])
+  // organization_events predates the `recurrence` column (added for P1-02 -
+  // see app/lib/recurrence.js), so CREATE TABLE IF NOT EXISTS above is a
+  // no-op against any database bootstrapped before this change. SQLite has
+  // no ADD COLUMN IF NOT EXISTS, so this runs once per isolate (guarded by
+  // communityTablesReady like the rest of this function) and tolerates
+  // already having the column.
+  try {
+    await db.prepare('ALTER TABLE organization_events ADD COLUMN recurrence TEXT').run()
+  } catch (e) {
+    if (!String(e).toLowerCase().includes('duplicate column')) throw e
+  }
   await db.prepare('PRAGMA optimize').run()
   communityTablesReady = true
   return db

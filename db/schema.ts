@@ -91,6 +91,7 @@ export const organizationEvents = sqliteTable('organization_events', {
   locationName: text('location_name').notNull(), address: text('address').notNull(), postcode: text('postcode').notNull(),
   startAt: text('start_at').notNull(), endAt: text('end_at').notNull(), capacity: integer('capacity'),
   eventType: text('event_type').notNull().default('community'), status: text('status').notNull().default('draft'),
+  recurrence: text('recurrence'),
   createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
 })
 

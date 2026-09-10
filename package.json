@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build"
+    "build": "vinext build",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@openai/sites-vite-plugin": "0.2.0",
