@@ -62,6 +62,13 @@ export function currentOccurrence(startAt, endAt, recurrence, now = new Date()) 
   if (Date.UTC(end.y, end.mo - 1, end.d, end.h, end.mi) > Date.UTC(nowPart.y, nowPart.mo - 1, nowPart.d, nowPart.h, nowPart.mi)) {
     return { startAt: format(start), endAt: format(end) }
   }
-  const weeksElapsed = Math.ceil(daysBetween(end, nowPart) / 7)
-  return { startAt: format(addDays(start, weeksElapsed * 7)), endAt: format(addDays(end, weeksElapsed * 7)) }
+  // daysBetween is calendar-day granular and can't tell "today's occurrence
+  // hasn't happened yet" from "it ended earlier today" - so pick the week by
+  // floor, then advance once more only if that candidate occurrence's real
+  // end instant (date AND time) has already passed.
+  const nowUTC = Date.UTC(nowPart.y, nowPart.mo - 1, nowPart.d, nowPart.h, nowPart.mi)
+  let weeks = Math.floor(daysBetween(end, nowPart) / 7)
+  const candidate = addDays(end, weeks * 7)
+  if (Date.UTC(candidate.y, candidate.mo - 1, candidate.d, candidate.h, candidate.mi) <= nowUTC) weeks += 1
+  return { startAt: format(addDays(start, weeks * 7)), endAt: format(addDays(end, weeks * 7)) }
 }
