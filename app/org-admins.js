@@ -1,21 +1,31 @@
 import { prepareCommunityTables } from '../db/index.js'
 
-// Claims any pending admin invitations for this email by linking them to
-// this account, so an owner can invite a teammate by email before that
-// teammate has ever created a Niyyah account - the invite becomes real
-// access the moment they sign up or sign in with that address. Safe to call
-// on every sign-up/sign-in, mirroring autoEnrollBySchoolEmail (see
-// app/org-membership.js). Unlike that function, this needs no
-// emailVerified gate: an invite always names one specific address an
-// existing owner/admin typed deliberately, so there's no "guess a domain"
-// exposure - only that exact address can ever claim it.
-export async function claimAdminInvites(userId, email) {
-  const cleanEmail = String(email || '').trim().toLowerCase()
-  if (!cleanEmail) return
+// Activates a pending admin invitation. Possession of the token (from the
+// link an owner copies and sends however they like - email, Slack, text) is
+// the entire authorization here, deliberately not the account's email
+// address: a password sign-up/sign-in's email is self-asserted (anyone can
+// claim any address at /api/auth/signup with no ownership check - see the
+// comment on this in app/org-membership.js, one privilege tier down), so an
+// invite that activated off "the signed-in account's email matches the
+// invited address" could be claimed by an attacker who simply registers
+// that address first. A random token nobody else has seen doesn't have that
+// hole, and unlike relying on Google's emailVerified it works before Google
+// sign-in is even configured, and for admins who only ever use a password.
+// Returns the organization name on success, or null if the token doesn't
+// match a still-pending invite (already used, or never existed).
+export async function acceptAdminInvite(userId, email, displayName, token) {
+  const cleanToken = String(token || '').trim()
+  if (!cleanToken) return null
   const db = await prepareCommunityTables()
   const now = new Date().toISOString()
-  await db.prepare(`UPDATE organization_admins SET user_id=?,status='active',updated_at=? WHERE email=? AND status='invited'`)
-    .bind(userId, now, cleanEmail).run()
+  const invite = await db.prepare("SELECT id,organization_id FROM organization_admins WHERE invite_token=? AND status='invited'").bind(cleanToken).first()
+  if (!invite) return null
+  // Whoever holds the link claims the seat, using their own real account
+  // details - not whatever address the owner guessed when typing the invite.
+  await db.prepare(`UPDATE organization_admins SET user_id=?,email=?,display_name=?,status='active',invite_token=NULL,updated_at=? WHERE id=?`)
+    .bind(userId, String(email || '').trim().toLowerCase(), displayName || null, now, invite.id).run()
+  const organization = await db.prepare('SELECT name FROM organizations WHERE id=?').bind(invite.organization_id).first()
+  return organization?.name || 'your organization'
 }
 
 // Resolves what organization (if any) this user can access from

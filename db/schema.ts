@@ -80,6 +80,7 @@ export const organizationAdmins = sqliteTable('organization_admins', {
   id:text('id').primaryKey(), organizationId:text('organization_id').notNull(), userId:text('user_id'),
   email:text('email').notNull(), displayName:text('display_name'),
   role:text('role').notNull().default('staff'), status:text('status').notNull().default('invited'),
+  inviteToken:text('invite_token'),
   invitedByUserId:text('invited_by_user_id').notNull(),
   createdAt:text('created_at').notNull(), updatedAt:text('updated_at').notNull(),
 })

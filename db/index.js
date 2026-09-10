@@ -173,6 +173,7 @@ export async function prepareCommunityTables() {
       display_name TEXT,
       role TEXT NOT NULL DEFAULT 'staff',
       status TEXT NOT NULL DEFAULT 'invited',
+      invite_token TEXT,
       invited_by_user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -285,6 +286,7 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_org ON organization_admins(organization_id,status)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_user ON organization_admins(user_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_email ON organization_admins(email)'),
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_org_admins_token ON organization_admins(invite_token)'),
   ])
   await db.prepare('PRAGMA optimize').run()
   return db

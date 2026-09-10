@@ -1,7 +1,6 @@
 import { prepareAuthTables } from '../../../../db/index.js'
 import { verifyPassword, createSession, sessionCookieHeader } from '../../../auth.ts'
 import { autoEnrollBySchoolEmail } from '../../../org-membership.js'
-import { claimAdminInvites } from '../../../org-admins.js'
 
 export async function POST(request) {
   try {
@@ -21,7 +20,6 @@ export async function POST(request) {
     // later sign-in even if the org registered its domain after this
     // account already existed. See app/org-membership.js.
     await autoEnrollBySchoolEmail(account.id, email, account.display_name, false)
-    await claimAdminInvites(account.id, email)
 
     const token = await createSession(account.id)
     return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookieHeader(token) } })

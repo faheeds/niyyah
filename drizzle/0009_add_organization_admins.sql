@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS `organization_admins` (
   `display_name` text,
   `role` text NOT NULL DEFAULT 'staff',
   `status` text NOT NULL DEFAULT 'invited',
+  `invite_token` text,
   `invited_by_user_id` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
@@ -17,3 +18,5 @@ CREATE INDEX IF NOT EXISTS `idx_org_admins_org` ON `organization_admins` (`organ
 CREATE INDEX IF NOT EXISTS `idx_org_admins_user` ON `organization_admins` (`user_id`);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `idx_org_admins_email` ON `organization_admins` (`email`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `idx_org_admins_token` ON `organization_admins` (`invite_token`);

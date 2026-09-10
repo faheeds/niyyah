@@ -35,10 +35,13 @@ export async function GET(){
       WHERE a.organization_id=? ORDER BY CASE a.status WHEN 'new' THEN 0 ELSE 1 END,a.created_at DESC`).bind(organization.id).all(),
     db.prepare(`SELECT id,email,display_name,tag,status,source,created_at FROM organization_members WHERE organization_id=? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
     db.prepare('SELECT domain FROM organization_email_domains WHERE organization_id=? ORDER BY domain').bind(organization.id).all(),
-    db.prepare(`SELECT id,email,display_name,role,status,created_at FROM organization_admins WHERE organization_id=? ORDER BY CASE status WHEN 'invited' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
+    db.prepare(`SELECT id,email,display_name,role,status,invite_token,created_at FROM organization_admins WHERE organization_id=? ORDER BY CASE status WHEN 'invited' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
   ])
   const ranked=(applications.results??[]).map(a=>{let score=45;const interests=(()=>{try{return JSON.parse(a.interests||'[]')}catch{return[]}})().map(x=>String(x).toLowerCase());if(interests.some(x=>x.includes(String(a.event_interest||'').toLowerCase())))score+=25;if(a.volunteer_postcode&&String(a.volunteer_postcode).replace(/\s/g,'').slice(0,3).toLowerCase()===String(a.event_postcode).replace(/\s/g,'').slice(0,3).toLowerCase())score+=15;score+=Math.min(15,Math.floor(Number(a.verified_hours||0)/5));return {...a,match_score:Math.min(100,score)}}).sort((a,b)=>b.match_score-a.match_score||String(a.created_at).localeCompare(String(b.created_at)))
-  return Response.json({organization,role,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:admins.results??[]})
+  // Only the owner can act on the admin roster (see the action gates in
+  // POST below), so only the owner receives it - staff/admin never see
+  // teammates' emails or a still-live invite token over the wire.
+  return Response.json({organization,role,events:events.results??[],hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
 }
 
 export async function POST(request){
@@ -135,14 +138,17 @@ export async function POST(request){
     if(!/^\S+@\S+\.\S+$/.test(email))return Response.json({error:'Enter a valid email address.'},{status:400})
     if(email===String(user.email||'').toLowerCase())return Response.json({error:"You're already the owner."},{status:400})
     const inviteRole=body.role==='admin'?'admin':'staff'
-    // An invite always names one specific address someone typed - there's
-    // no domain-style guesswork here, so it's safe to link immediately if
-    // that address already has an account, or wait for their next sign-in
-    // (see claimAdminInvites in app/org-admins.js) if it doesn't yet.
-    await db.prepare(`INSERT INTO organization_admins (id,organization_id,user_id,email,display_name,role,status,invited_by_user_id,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,email) DO UPDATE SET role=excluded.role,updated_at=excluded.updated_at`)
-      .bind(crypto.randomUUID(),organization.id,null,email,clean(body.displayName,120)||null,inviteRole,'invited',user.userId,now,now).run()
-    return Response.json({ok:true})
+    // Whoever holds this link claims the seat (see acceptAdminInvite in
+    // app/org-admins.js) - the email above is only a label for this list
+    // until then, never itself a grant of access.
+    const inviteToken=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,'0')).join('')
+    await db.prepare(`INSERT INTO organization_admins (id,organization_id,user_id,email,display_name,role,status,invite_token,invited_by_user_id,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,email) DO UPDATE SET role=excluded.role,updated_at=excluded.updated_at,
+      invite_token=CASE WHEN organization_admins.status='invited' THEN excluded.invite_token ELSE organization_admins.invite_token END`)
+      .bind(crypto.randomUUID(),organization.id,null,email,clean(body.displayName,120)||null,inviteRole,'invited',inviteToken,user.userId,now,now).run()
+    const current=await db.prepare('SELECT invite_token,status FROM organization_admins WHERE organization_id=? AND email=?').bind(organization.id,email).first()
+    const origin=new URL(request.url).origin
+    return Response.json({ok:true,inviteUrl:current?.status==='invited'&&current.invite_token?`${origin}/organizer/accept-invite?token=${current.invite_token}`:null})
   }
   if(action==='updateAdminRole'){
     const newRole=body.role==='admin'?'admin':'staff'
