@@ -12,7 +12,8 @@ const allowedTags = new Set(['parent', 'external'])
 export async function POST(request) {
   const user = await getUser()
   if (!user) return Response.json({ error: 'Sign in required.' }, { status: 401 })
-  const body = await request.json()
+  let body
+  try { body = await request.json() } catch { return Response.json({ error: 'Invalid request.' }, { status: 400 }) }
   const organizationId = String(body.organizationId || '')
   const tag = allowedTags.has(body.tag) ? body.tag : 'external'
   const db = await prepareCommunityTables()

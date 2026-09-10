@@ -100,7 +100,16 @@ export async function POST(request){
     return Response.json({ok:true})
   }
   if(action==='removeMember'){
-    await db.prepare('DELETE FROM organization_members WHERE id=? AND organization_id=?').bind(clean(body.membershipId,80),organization.id).run()
+    const membershipId=clean(body.membershipId,80)
+    const member=await db.prepare('SELECT source FROM organization_members WHERE id=? AND organization_id=?').bind(membershipId,organization.id).first()
+    if(member?.source==='school_email'){
+      // Auto-enrollment re-runs on every sign-in and ON CONFLICT DO NOTHING
+      // only skips rows that still exist, so a hard delete here would let
+      // the student silently reappear, approved, on their next sign-in.
+      await db.prepare("UPDATE organization_members SET status='removed',updated_at=? WHERE id=? AND organization_id=?").bind(now,membershipId,organization.id).run()
+    }else{
+      await db.prepare('DELETE FROM organization_members WHERE id=? AND organization_id=?').bind(membershipId,organization.id).run()
+    }
     return Response.json({ok:true})
   }
   return Response.json({error:'Unknown action.'},{status:400})

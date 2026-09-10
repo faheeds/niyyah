@@ -19,7 +19,7 @@ export async function POST(request) {
     // Idempotent - lets a student get swept onto their school's roster on a
     // later sign-in even if the org registered its domain after this
     // account already existed. See app/org-membership.js.
-    await autoEnrollBySchoolEmail(account.id, email, account.display_name)
+    await autoEnrollBySchoolEmail(account.id, email, account.display_name, false)
 
     const token = await createSession(account.id)
     return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookieHeader(token) } })
