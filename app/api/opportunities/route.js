@@ -1,6 +1,7 @@
 import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
+import { sendSignupConfirmation } from '../../lib/notify.js'
 
 const parse=value=>{try{return JSON.parse(value||'[]')}catch{return[]}}
 const area=postcode=>String(postcode||'').toUpperCase().replace(/\s/g,'').slice(0,3)
@@ -30,19 +31,26 @@ export async function GET(){
 
 export async function POST(request){
   const user=await getUser();if(!user)return Response.json({error:'Sign in required.'},{status:401})
-  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT e.id,e.organization_id,e.event_type,e.start_at,e.end_at,e.recurrence FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.id=? AND e.status='published' AND o.status='approved'").bind(String(eventId||'')).first()
+  const {eventId,date,time}=await request.json(),db=await prepareCommunityTables(),event=await db.prepare("SELECT e.id,e.organization_id,e.event_type,e.start_at,e.end_at,e.recurrence,e.title,e.location_name,o.name AS organization_name FROM organization_events e JOIN organizations o ON o.id=e.organization_id WHERE e.id=? AND e.status='published' AND o.status='approved'").bind(String(eventId||'')).first()
   if(!event)return Response.json({error:'Opportunity not found.'},{status:404})
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||!/^\d{2}:\d{2}$/.test(String(time||'')))return Response.json({error:'Choose a valid date and time slot.'},{status:400})
   const occ=currentOccurrence(event.start_at,event.end_at,event.recurrence)
   const chosen=new Date(`${date}T${time}`),start=new Date(occ.startAt),end=new Date(occ.endAt)
   if(Number.isNaN(chosen.getTime())||chosen<new Date(start.toISOString().slice(0,10)+'T00:00')||chosen>new Date(end.toISOString().slice(0,10)+'T23:59'))return Response.json({error:'That slot is outside the event dates.'},{status:400})
   const now=new Date().toISOString()
+  let isNewSignup=false
   if(event.event_type==='volunteering'){
-    await db.prepare(`INSERT INTO volunteer_applications (id,event_id,organization_id,user_id,applicant_email,applicant_name,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(crypto.randomUUID(),event.id,event.organization_id,user.userId,user.email,user.displayName,'new',now,now).run()
+    const inserted=await db.prepare(`INSERT INTO volunteer_applications (id,event_id,organization_id,user_id,applicant_email,applicant_name,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(crypto.randomUUID(),event.id,event.organization_id,user.userId,user.email,user.displayName,'new',now,now).run()
+    isNewSignup=!!inserted?.meta?.changes
     const requirement=await db.prepare('SELECT volunteers_needed,auto_pause FROM event_volunteer_requirements WHERE event_id=?').bind(event.id).first()
     if(requirement?.auto_pause){const count=await db.prepare("SELECT COUNT(*) AS total FROM volunteer_applications WHERE event_id=? AND status!='declined'").bind(event.id).first();if(Number(count?.total||0)>=Number(requirement.volunteers_needed||1))await db.prepare("UPDATE organization_events SET status='closed',updated_at=? WHERE id=?").bind(now,event.id).run()}
   }
-  else await db.prepare(`INSERT INTO event_participations (id,event_id,user_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(crypto.randomUUID(),event.id,user.userId,'going',now,now).run()
+  else {
+    const inserted=await db.prepare(`INSERT INTO event_participations (id,event_id,user_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(crypto.randomUUID(),event.id,user.userId,'going',now,now).run()
+    isNewSignup=!!inserted?.meta?.changes
+  }
   await db.prepare(`INSERT INTO event_signup_slots (id,event_id,user_id,selected_date,selected_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(event_id,user_id) DO UPDATE SET selected_date=excluded.selected_date,selected_time=excluded.selected_time,updated_at=excluded.updated_at`).bind(crypto.randomUUID(),event.id,user.userId,date,time,now,now).run()
+  // Only the first time someone signs up - not every time they change their slot - see P1-01.
+  if(isNewSignup)await sendSignupConfirmation({to:user.email,name:user.displayName,eventTitle:event.title,organizationName:event.organization_name,startAt:`${date}T${time}`,locationName:event.location_name})
   return Response.json({ok:true})
 }
