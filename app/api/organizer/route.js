@@ -84,7 +84,7 @@ export async function POST(request){
     return Response.json({error:'Only the organization owner can manage admins.'},{status:403})
   if(action==='saveEvent'){
     const fields=['title','summary','interest','ageRange','locationName','address','postcode','startAt','endAt']
-    const labels={title:'event name',summary:'description',interest:'interest',ageRange:'age range',locationName:'venue',address:'address',postcode:'postcode',startAt:'start date and time',endAt:'end date and time'},missing=fields.filter(key=>!clean(body[key],key==='summary'?600:200))
+    const labels={title:'event name',summary:'description',interest:'interest',ageRange:'age range',locationName:'venue',address:'address',postcode:'zip code',startAt:'start date and time',endAt:'end date and time'},missing=fields.filter(key=>!clean(body[key],key==='summary'?600:200))
     if(missing.length)return Response.json({error:`Please complete: ${missing.map(key=>labels[key]).join(', ')}.`},{status:400})
     const eventContentIssue=moderationIssue(body.title)||moderationIssue(body.summary)
     if(eventContentIssue)return Response.json({error:eventContentIssue},{status:400})

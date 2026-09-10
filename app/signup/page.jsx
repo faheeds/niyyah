@@ -96,7 +96,7 @@ export default function SignupPage() {
             <label>Age range *<select name="ageGroup" value={form.ageGroup} onChange={update} required><option value="">Choose one</option>{['13–15', '16–17', '18–24', '25–34', '35+'].map((age) => <option key={age}>{age}</option>)}</select></label>
           </div>
           <div className="field-grid two">
-            <label>Postcode *<input name="postcode" value={form.postcode} onChange={update} autoComplete="postal-code" placeholder="e.g. E1 6AN" required /></label>
+            <label>Zip code *<input name="postcode" value={form.postcode} onChange={update} autoComplete="postal-code" placeholder="e.g. 98101" required /></label>
           </div>
         </section>
 
