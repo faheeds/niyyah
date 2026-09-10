@@ -39,7 +39,7 @@ export function readCookie(cookieHeader: string | null, name: string): string | 
 export async function hashPassword(password: string, saltB64?: string): Promise<{ hash: string; salt: string }> {
   const salt = saltB64 ? fromBase64(saltB64) : crypto.getRandomValues(new Uint8Array(16))
   const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, keyMaterial, 256)
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, 256)
   return { hash: toBase64(new Uint8Array(bits)), salt: toBase64(salt) }
 }
 
