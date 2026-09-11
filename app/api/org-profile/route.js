@@ -1,5 +1,6 @@
 import { prepareCommunityTables } from '../../../db/index.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
+import { rankStandings, publicLabel, isCompetitionActive } from '../../lib/awards.js'
 
 // P1-10: an organization's own branded landing page. Public and unauthenticated,
 // same as app/api/events/route.js — only approved organizations are
@@ -17,5 +18,33 @@ export async function GET(request){
     LEFT JOIN volunteer_opportunities v ON v.event_id=e.id
     WHERE e.organization_id=? AND e.status='published' ORDER BY e.start_at ASC LIMIT 40`).bind(organization.id).all()
   const occurrenced=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,start_at:occ.startAt,end_at:occ.endAt}}).sort((a,b)=>String(a.start_at).localeCompare(String(b.start_at)))
-  return Response.json({organization,events:occurrenced})
+  const competitions=await loadActiveCompetitions(db,organization.id)
+  return Response.json({organization,events:occurrenced,competitions})
+}
+
+// P1-11: shows currently-running competitions on the public org page. Unlike
+// the organizer's own Awards tab (app/api/organizer/route.js), this is
+// public and unauthenticated, so it (a) only surfaces competitions whose
+// date window includes today - not the org's full past/upcoming history -
+// and (b) never exposes a volunteer's email or full name, since Niyyah
+// volunteers can be minors (see publicLabel in app/lib/awards.js). Only
+// roster members with at least one verified hour in the window are
+// included, so the page doesn't list every roster member at "0 hrs", and
+// the list is capped for page length.
+async function loadActiveCompetitions(db,organizationId){
+  const todayStr=new Date().toISOString().slice(0,10)
+  const rows=await db.prepare('SELECT * FROM award_competitions WHERE organization_id=? ORDER BY start_date DESC').bind(organizationId).all()
+  const active=(rows.results??[]).filter(c=>isCompetitionActive({startDate:c.start_date,endDate:c.end_date},todayStr))
+  const competitions=[]
+  for(const comp of active){
+    const tierRows=await db.prepare('SELECT name,min_hours FROM award_tiers WHERE competition_id=? ORDER BY min_hours DESC').bind(comp.id).all()
+    const tiers=(tierRows.results??[]).map(t=>({name:t.name,minHours:t.min_hours}))
+    const rosterRows=await db.prepare(`SELECT m.id AS membership_id,m.display_name,
+      COALESCE((SELECT SUM(hours) FROM volunteer_activities WHERE user_id=m.user_id AND status='approved' AND activity_date>=? AND activity_date<=?),0) AS hours
+      FROM organization_members m WHERE m.organization_id=? AND m.status='approved'`).bind(comp.start_date,comp.end_date,organizationId).all()
+    const participants=(rosterRows.results??[]).filter(r=>Number(r.hours||0)>0).map(r=>({membershipId:r.membership_id,label:publicLabel(r.display_name),hours:r.hours}))
+    const standings=rankStandings(participants,tiers).slice(0,20)
+    competitions.push({id:comp.id,name:comp.name,description:comp.description,startDate:comp.start_date,endDate:comp.end_date,tiers,standings})
+  }
+  return competitions
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { tierForHours, rankStandings } from '../app/lib/awards.js'
+import { tierForHours, rankStandings, publicLabel, isCompetitionActive } from '../app/lib/awards.js'
 
 const TIERS = [
   { name: 'Bronze', minHours: 10 },
@@ -48,4 +48,35 @@ test('rankStandings sorts highest hours first and attaches tier names', () => {
   assert.equal(ranked[0].tier, 'Gold')
   assert.equal(ranked[1].tier, 'Silver')
   assert.equal(ranked[2].tier, null)
+})
+
+test('publicLabel shortens a full name to first name plus last initial', () => {
+  assert.equal(publicLabel('Amina Khan'), 'Amina K.')
+})
+
+test('publicLabel uses the last word\'s initial when there are middle names', () => {
+  assert.equal(publicLabel('Jean Claude Van Damme'), 'Jean D.')
+})
+
+test('publicLabel leaves a single-word name unchanged', () => {
+  assert.equal(publicLabel('Cher'), 'Cher')
+})
+
+test('publicLabel falls back generically when there is no name on file', () => {
+  assert.equal(publicLabel(''), 'A Niyyah volunteer')
+  assert.equal(publicLabel('   '), 'A Niyyah volunteer')
+  assert.equal(publicLabel(undefined), 'A Niyyah volunteer')
+})
+
+test('isCompetitionActive is true when today falls inside the window, inclusive of both ends', () => {
+  const comp = { startDate: '2026-09-01', endDate: '2026-09-30' }
+  assert.equal(isCompetitionActive(comp, '2026-09-01'), true)
+  assert.equal(isCompetitionActive(comp, '2026-09-15'), true)
+  assert.equal(isCompetitionActive(comp, '2026-09-30'), true)
+})
+
+test('isCompetitionActive is false before the start or after the end', () => {
+  const comp = { startDate: '2026-09-01', endDate: '2026-09-30' }
+  assert.equal(isCompetitionActive(comp, '2026-08-31'), false)
+  assert.equal(isCompetitionActive(comp, '2026-10-01'), false)
 })

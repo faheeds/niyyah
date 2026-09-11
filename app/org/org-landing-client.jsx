@@ -1,21 +1,21 @@
 'use client'
 import { useEffect,useState } from 'react'
-import { ArrowRight,CalendarDays,HeartHandshake,LoaderCircle,MapPin,ShieldCheck } from 'lucide-react'
+import { ArrowRight,CalendarDays,HeartHandshake,LoaderCircle,MapPin,ShieldCheck,Star } from 'lucide-react'
 
 export default function OrgLandingClient({slug}){
-  const [state,setState]=useState({loading:true,error:'',organization:null,events:[]})
+  const [state,setState]=useState({loading:true,error:'',organization:null,events:[],competitions:[]})
   useEffect(()=>{
-    if(!slug){setState({loading:false,error:"This organization's page link looks incomplete.",organization:null,events:[]});return}
+    if(!slug){setState({loading:false,error:"This organization's page link looks incomplete.",organization:null,events:[],competitions:[]});return}
     fetch(`/api/org-profile?slug=${encodeURIComponent(slug)}`)
       .then(r=>r.json())
-      .then(json=>setState(json.error?{loading:false,error:json.error,organization:null,events:[]}:{loading:false,error:'',organization:json.organization,events:json.events}))
-      .catch(()=>setState({loading:false,error:'Something went wrong loading this page.',organization:null,events:[]}))
+      .then(json=>setState(json.error?{loading:false,error:json.error,organization:null,events:[],competitions:[]}:{loading:false,error:'',organization:json.organization,events:json.events,competitions:json.competitions||[]}))
+      .catch(()=>setState({loading:false,error:'Something went wrong loading this page.',organization:null,events:[],competitions:[]}))
   },[slug])
 
   if(state.loading)return <main className="org-landing-loading"><LoaderCircle className="spin"/>Loading…</main>
   if(state.error||!state.organization)return <main className="org-landing-shell"><header className="org-landing-nav"><a href="/"><HeartHandshake size={16}/> Niyyah</a></header><section className="org-landing-notfound"><h1>We couldn't find that page</h1><p>{state.error||'This organization link may have moved or is no longer active.'}</p><a className="primary" href="/">Explore Niyyah <ArrowRight size={16}/></a></section></main>
 
-  const {organization,events}=state,accent=organization.brand_color||'#174c3d'
+  const {organization,events,competitions}=state,accent=organization.brand_color||'#174c3d'
   return <main className="org-landing-shell" style={{'--org-accent':accent}}>
     <header className="org-landing-nav"><a href="/"><HeartHandshake size={16}/> Powered by Niyyah</a></header>
     <section className="org-landing-hero">
@@ -27,6 +27,15 @@ export default function OrgLandingClient({slug}){
         {organization.safeguarding_name&&<span><ShieldCheck size={13}/> Safety contact: {organization.safeguarding_name}</span>}
       </div>
     </section>
+    {competitions.length>0&&<section className="org-landing-leaderboard">
+      <h2><Star size={20}/> Volunteering leaderboard</h2>
+      {competitions.map(comp=><div key={comp.id} className="org-landing-competition">
+        <div className="org-landing-competition-head"><h3>{comp.name}</h3><span>{comp.startDate} &ndash; {comp.endDate}</span></div>
+        {comp.description&&<p>{comp.description}</p>}
+        <div className="tier-badges">{comp.tiers.map(t=><span key={t.name} className="tier-badge">{t.name} &middot; {t.minHours}+ hrs</span>)}</div>
+        {comp.standings.length?<ol className="standings-list">{comp.standings.map((s,i)=><li key={s.membershipId}><span><b>#{i+1}</b> {s.label}</span><span>{s.hours} hrs</span>{s.tier?<span className="tier-badge earned">{s.tier}</span>:<span className="tier-badge none">No tier yet</span>}</li>)}</ol>:<p className="org-landing-empty">No verified hours logged yet in this competition &mdash; check back soon.</p>}
+      </div>)}
+    </section>}
     <section className="org-landing-events">
       <h2>Upcoming with {organization.name}</h2>
       {events.length?<div className="org-landing-event-grid">{events.map(item=><article key={item.id} className="org-landing-event"><span className="org-landing-event-kind">{item.event_type==='volunteering'?'Volunteer task':'Community event'}</span><h3>{item.title}</h3><p>{item.summary}</p><span><CalendarDays size={13}/>{new Date(item.start_at).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span><span><MapPin size={13}/>{item.location_name}</span><a className="org-landing-join" href="/opportunities">Sign up on Niyyah <ArrowRight size={13}/></a></article>)}</div>:<p className="org-landing-empty">No published events right now — check back soon.</p>}

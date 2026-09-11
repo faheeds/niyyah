@@ -175,6 +175,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-notfound{max-width:520px;margin:80px auto;text-align:center;padding:0 20px}
 .org-landing-notfound h1{font:800 30px 'Manrope';margin:0 0 10px}
 .org-landing-notfound p{color:var(--muted);margin:0 0 22px}
+.org-landing-leaderboard{max-width:1000px;margin:0 auto;padding:44px max(24px,calc((100vw - 1000px)/2)) 0}
+.org-landing-leaderboard h2{display:flex;align-items:center;gap:9px;font:800 26px 'Manrope';margin:0 0 20px;color:var(--ink)}
+.org-landing-leaderboard h2 svg{color:#b07717}
+.org-landing-competition{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:14px}
+.org-landing-competition:last-child{margin-bottom:0}
+.org-landing-competition-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.org-landing-competition-head h3{font:800 17px 'Manrope';margin:0}
+.org-landing-competition-head span{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+.org-landing-competition>p{color:var(--muted);font-size:12px;margin:0 0 12px}
+.org-landing-competition .tier-badges{margin-bottom:12px}
 .org-landing-events{max-width:1000px;margin:0 auto;padding:44px max(24px,calc((100vw - 1000px)/2)) 70px}
 .org-landing-events h2{font:800 26px 'Manrope';margin:0 0 20px;color:var(--ink)}
 .org-landing-event-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
@@ -187,7 +197,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-empty{color:var(--muted)}
 .org-landing-footer{text-align:center;padding:24px 20px 44px;color:var(--muted);font-size:11px}
 .org-landing-footer a{color:var(--org-accent);font-weight:700;text-decoration:none}
-@media (max-width:680px){.org-landing-hero{padding:36px 18px 32px}.org-landing-events{padding:32px 16px 50px}.org-landing-event-grid{grid-template-columns:1fr}}
+@media (max-width:680px){.org-landing-hero{padding:36px 18px 32px}.org-landing-leaderboard{padding:32px 16px 0}.org-landing-events{padding:32px 16px 50px}.org-landing-event-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto!important; transition:none!important; } }
 .roster-domains{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .roster-domains span{display:flex;align-items:center;gap:6px;border:1px solid #cbd8cf;background:#fafaf6;border-radius:99px;padding:8px 10px;font-size:10px;font-weight:700;color:#285346}
