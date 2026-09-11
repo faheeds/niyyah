@@ -228,7 +228,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
    background:var(--org-accent) stays first as a color-mix()-unsupported
    fallback - a browser that can't parse the second declaration just keeps
    the first, it never falls through to no background at all. */
-.org-landing-hero{background:var(--org-accent);background:linear-gradient(135deg,var(--org-accent),color-mix(in srgb,var(--org-accent) 55%,#000 45%));color:#fff;padding:50px max(24px,calc((100vw - 900px)/2)) 44px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.org-landing-hero{position:relative;background:var(--org-accent);background:linear-gradient(135deg,var(--org-accent),color-mix(in srgb,var(--org-accent) 55%,#000 45%));background-size:cover;background-position:center;background-repeat:no-repeat;min-height:440px;color:#fff;padding:50px max(24px,calc((100vw - 900px)/2)) 44px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}
 /* P2-02: object-fit:contain (was cover) + a little padding so a wide/
    non-square logo is shown in full rather than cropped at the sides -
    cover was slicing real logos in half on the live site. */
@@ -237,7 +237,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-hero h1{font:800 clamp(32px,5vw,48px)/1.05 'Manrope';letter-spacing:-1.5px;margin:0 0 12px;max-width:720px}
 .org-landing-hero>p{max-width:600px;opacity:.92;line-height:1.6;margin:0}
 .org-landing-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:22px}
-.org-landing-meta a,.org-landing-meta span{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border-radius:99px;padding:8px 14px;font-size:11px;font-weight:700;color:#fff;text-decoration:none}
+.org-landing-meta a,.org-landing-meta span{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:99px;padding:8px 14px;font-size:11px;font-weight:700;color:#fff;text-decoration:none}
 .org-landing-tagline{font:700 15px 'Manrope';opacity:.95;margin:-4px 0 4px;max-width:600px}
 /* P2-01: the impact-stats band - inline inside the hero for the Vibrant
    preset (theme-vibrant), or its own card below the hero for the other two
@@ -260,10 +260,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-stats-section .org-landing-stats b{color:var(--org-accent)}
 .org-landing-stats-section .org-landing-stats small{color:var(--muted);opacity:1}
 
+/* P2-03: a photo's own brightness/colour is unpredictable - white hero
+   text read fine over the plain gradient fallback but went unreadable over
+   a bright real cover photo, reported live. A dark scrim guarantees
+   contrast regardless of what's in the photo; the direct-child z-index
+   promotion keeps the logo/heading/stats above it (paired with
+   position:relative on .org-landing-hero above), and the text-shadow is
+   extra insurance right at the scrim's edges. Warm/Minimal below already
+   solve this their own way (bottom overlay / solid-panel copy side), so
+   this only needs to target Vibrant. */
+.theme-vibrant.has-cover::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,12,10,.34),rgba(10,12,10,.6));pointer-events:none}
+.theme-vibrant.has-cover>*{position:relative;z-index:1}
+.theme-vibrant.has-cover h1,.theme-vibrant.has-cover .org-landing-tagline,.theme-vibrant.has-cover>p{text-shadow:0 2px 16px rgba(0,0,0,.45)}
+
 /* P2-01: Warm Community preset - full-bleed cover photo (a themed gradient
    until one's uploaded), identity anchored bottom-left over a dark overlay
-   so text stays legible against any photo. theme-vibrant needs no rules of
-   its own here - it's today's existing centered color-block look above. */
+   so text stays legible against any photo. */
 .theme-warm{background:linear-gradient(155deg,#8b5a3c,#4f3320);background-size:cover;background-position:center;min-height:420px;text-align:left;align-items:flex-start;justify-content:flex-end;position:relative;padding:0}
 .theme-warm.has-cover{background-color:#2a1d13}
 .theme-warm::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,20,16,0) 30%,rgba(15,15,12,.82) 100%)}
