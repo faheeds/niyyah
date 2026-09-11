@@ -292,6 +292,28 @@ export async function prepareCommunityTables() {
       completed_at TEXT,
       UNIQUE(inviter_user_id,invitee_email)
     )`),
+    // P1-09: an organizer-run competition over a date range, with its own
+    // custom award tiers (Gold/Silver/Bronze or whatever names they choose).
+    // Participants are the org's roster (organization_members) - see
+    // app/lib/awards.js for how a person's hours map to a tier.
+    db.prepare(`CREATE TABLE IF NOT EXISTS award_competitions (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS award_tiers (
+      id TEXT PRIMARY KEY NOT NULL,
+      competition_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      min_hours INTEGER NOT NULL CHECK(min_hours > 0),
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_profiles_discoverable ON member_profiles(discoverable, display_name)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_activities_user_date ON volunteer_activities(user_id, activity_date DESC)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_connections_recipient_status ON member_connections(recipient_id, status)'),
@@ -310,6 +332,8 @@ export async function prepareCommunityTables() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_user ON organization_admins(user_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_org_admins_email ON organization_admins(email)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_org_admins_token ON organization_admins(invite_token)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_award_competitions_org ON award_competitions(organization_id,start_date DESC)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_award_tiers_competition ON award_tiers(competition_id,min_hours DESC)'),
   ])
   // organization_events predates the `recurrence` column (added for P1-02 -
   // see app/lib/recurrence.js), so CREATE TABLE IF NOT EXISTS above is a
