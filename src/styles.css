@@ -200,3 +200,5 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .ai-draft-row{display:flex;gap:8px;margin:-4px 0 14px;flex-wrap:wrap}
 .ai-draft-row input{flex:1 1 220px;border:1px solid #ccd8cf;background:#faf9f4;border-radius:11px;padding:11px 12px;color:var(--ink);font:500 12px 'DM Sans';outline:0}
 .ai-draft-row .secondary-action{display:flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto}
+/* P2-03: the short, deterministic explanation under an applicant's match score. */
+.ranking-reason{color:#527067;font-size:10px;font-weight:600;margin:2px 0 0}

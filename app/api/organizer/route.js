@@ -7,6 +7,7 @@ import { sendApplicationStatusUpdate } from '../../lib/notify.js'
 import { slugify } from '../../lib/org-slug.js'
 import { rankStandings } from '../../lib/awards.js'
 import { draftEvent } from '../../lib/ai-draft.js'
+import { buildRankingReason } from '../../lib/ranking-reason.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -56,7 +57,7 @@ export async function GET(){
     db.prepare('SELECT domain FROM organization_email_domains WHERE organization_id=? ORDER BY domain').bind(organization.id).all(),
     db.prepare(`SELECT id,email,display_name,role,status,invite_token,created_at FROM organization_admins WHERE organization_id=? ORDER BY CASE status WHEN 'invited' THEN 0 ELSE 1 END, created_at DESC`).bind(organization.id).all(),
   ])
-  const ranked=(applications.results??[]).map(a=>{let score=45;const interests=(()=>{try{return JSON.parse(a.interests||'[]')}catch{return[]}})().map(x=>String(x).toLowerCase());if(interests.some(x=>x.includes(String(a.event_interest||'').toLowerCase())))score+=25;if(a.volunteer_postcode&&String(a.volunteer_postcode).replace(/\s/g,'').slice(0,3).toLowerCase()===String(a.event_postcode).replace(/\s/g,'').slice(0,3).toLowerCase())score+=15;score+=Math.min(15,Math.floor(Number(a.verified_hours||0)/5));return {...a,match_score:Math.min(100,score)}}).sort((a,b)=>b.match_score-a.match_score||String(a.created_at).localeCompare(String(b.created_at)))
+  const ranked=(applications.results??[]).map(a=>{let score=45;const interests=(()=>{try{return JSON.parse(a.interests||'[]')}catch{return[]}})().map(x=>String(x).toLowerCase());const interestMatch=interests.some(x=>x.includes(String(a.event_interest||'').toLowerCase()));if(interestMatch)score+=25;const nearby=!!(a.volunteer_postcode&&String(a.volunteer_postcode).replace(/\s/g,'').slice(0,3).toLowerCase()===String(a.event_postcode).replace(/\s/g,'').slice(0,3).toLowerCase());if(nearby)score+=15;const hoursBonus=Math.min(15,Math.floor(Number(a.verified_hours||0)/5));score+=hoursBonus;return {...a,match_score:Math.min(100,score),ranking_reason:buildRankingReason({interestMatch,nearby,hoursBonus,eventInterest:a.event_interest})}}).sort((a,b)=>b.match_score-a.match_score||String(a.created_at).localeCompare(String(b.created_at)))
   // Only the owner can act on the admin roster (see the action gates in
   // POST below), so only the owner receives it - staff/admin never see
   // teammates' emails or a still-live invite token over the wire.
