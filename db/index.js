@@ -163,6 +163,9 @@ export async function prepareCommunityTables() {
       description TEXT NOT NULL,
       safeguarding_name TEXT NOT NULL,
       safeguarding_email TEXT NOT NULL,
+      slug TEXT,
+      logo_data_url TEXT,
+      brand_color TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -323,6 +326,25 @@ export async function prepareCommunityTables() {
     if (!String(e).toLowerCase().includes('duplicate column')) throw e
   }
   await db.prepare('PRAGMA optimize').run()
+  // organizations predates the slug/logo_data_url/brand_color columns (added
+  // for P1-10 - branded organization landing pages, see
+  // app/api/org-profile/route.js). Same tolerate-duplicate-column pattern as
+  // organization_events.recurrence above. slug is nullable and only backfilled
+  // the next time an organization saves its profile (see saveOrganization in
+  // app/api/organizer/route.js) - a UNIQUE index still works fine with many
+  // NULLs, since SQLite never treats NULLs as equal to each other.
+  for (const stmt of [
+    'ALTER TABLE organizations ADD COLUMN slug TEXT',
+    'ALTER TABLE organizations ADD COLUMN logo_data_url TEXT',
+    'ALTER TABLE organizations ADD COLUMN brand_color TEXT',
+  ]) {
+    try {
+      await db.prepare(stmt).run()
+    } catch (e) {
+      if (!String(e).toLowerCase().includes('duplicate column')) throw e
+    }
+  }
+  await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug)').run()
   communityTablesReady = true
   return db
 }
