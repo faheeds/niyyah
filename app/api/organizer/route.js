@@ -154,6 +154,12 @@ export async function POST(request){
   }
   if(action==='deleteCompetition'){
     const id=clean(body.id,80)
+    // Scope to this org before touching award_tiers - without this check a
+    // caller could pass another organization's competition id and wipe its
+    // tiers even though the award_competitions row itself stays protected
+    // by the AND organization_id=? below (caught in review).
+    const owned=await db.prepare('SELECT id FROM award_competitions WHERE id=? AND organization_id=?').bind(id,organization.id).first()
+    if(!owned)return Response.json({error:'Competition not found.'},{status:404})
     await db.prepare('DELETE FROM award_tiers WHERE competition_id=?').bind(id).run()
     await db.prepare('DELETE FROM award_competitions WHERE id=? AND organization_id=?').bind(id,organization.id).run()
     return Response.json({ok:true})
