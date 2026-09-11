@@ -211,7 +211,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:22px}
 .org-landing-meta a,.org-landing-meta span{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border-radius:99px;padding:8px 14px;font-size:11px;font-weight:700;color:#fff;text-decoration:none}
 .org-landing-notfound{max-width:520px;margin:80px auto;text-align:center;padding:0 20px}
-.org-landing-notfound h1{font:800 30px 'Manrope';margin:0 0 10px}
+.org-landing-notfound h1{font:800 30px 'Manrope';letter-spacing:normal;margin:0 0 10px}
 .org-landing-notfound p{color:var(--muted);margin:0 0 22px}
 /* P1-17: the pending-review state - same shell as org-landing-notfound,
    distinguished by a small status badge rather than a whole new layout. */
