@@ -5,6 +5,7 @@ import { currentOccurrence } from '../../lib/recurrence.js'
 import { moderationIssue } from '../../lib/content-filter.js'
 import { sendApplicationStatusUpdate } from '../../lib/notify.js'
 import { slugify } from '../../lib/org-slug.js'
+import { rankStandings } from '../../lib/awards.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -65,7 +66,28 @@ export async function GET(){
   // fields instead - see P1-02 review feedback on PR for organizer-client.jsx
   // staleness in both the upcoming/past split and the event list label.
   const eventsWithOccurrence=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,next_start_at:occ.startAt,next_end_at:occ.endAt}})
-  return Response.json({organization,role,events:eventsWithOccurrence,hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[]})
+  const competitions=await loadCompetitions(db,organization.id)
+  return Response.json({organization,role,events:eventsWithOccurrence,hours:hours.results??[],applications:ranked,members:members.results??[],emailDomains:emailDomains.results??[],admins:role==='owner'?admins.results??[]:[],competitions})
+}
+
+// P1-09: each competition's standings are the org's approved roster, ranked
+// by a person's total *verified* hours anywhere on Niyyah within the
+// competition's date window (not only hours logged with this org) - see the
+// backlog card for why. Small org rosters make the per-competition query
+// here fine; revisit if an org's roster grows into the thousands.
+async function loadCompetitions(db,organizationId){
+  const rows=await db.prepare('SELECT * FROM award_competitions WHERE organization_id=? ORDER BY start_date DESC').bind(organizationId).all()
+  const competitions=[]
+  for(const comp of rows.results??[]){
+    const tierRows=await db.prepare('SELECT name,min_hours FROM award_tiers WHERE competition_id=? ORDER BY min_hours DESC').bind(comp.id).all()
+    const tiers=(tierRows.results??[]).map(t=>({name:t.name,minHours:t.min_hours}))
+    const rosterRows=await db.prepare(`SELECT m.id AS membership_id,m.display_name,m.email,
+      COALESCE((SELECT SUM(hours) FROM volunteer_activities WHERE user_id=m.user_id AND status='approved' AND activity_date>=? AND activity_date<=?),0) AS hours
+      FROM organization_members m WHERE m.organization_id=? AND m.status='approved'`).bind(comp.start_date,comp.end_date,organizationId).all()
+    const standings=rankStandings((rosterRows.results??[]).map(r=>({membershipId:r.membership_id,displayName:r.display_name,email:r.email,hours:r.hours})),tiers)
+    competitions.push({...comp,tiers,standings})
+  }
+  return competitions
 }
 
 export async function POST(request){
@@ -102,7 +124,7 @@ export async function POST(request){
     return Response.json({ok:true,slug})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})
-  if(['saveEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain'].includes(action)&&!canManageOrg(role))
+  if(['saveEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition'].includes(action)&&!canManageOrg(role))
     return Response.json({error:'You do not have permission to do that.'},{status:403})
   if(['inviteAdmin','updateAdminRole','removeAdmin'].includes(action)&&role!=='owner')
     return Response.json({error:'Only the organization owner can manage admins.'},{status:403})
@@ -132,6 +154,39 @@ export async function POST(request){
   }
   if(action==='deleteEvent'){
     await db.prepare('DELETE FROM organization_events WHERE id=? AND organization_id=?').bind(clean(body.id,80),organization.id).run(); return Response.json({ok:true})
+  }
+  if(action==='saveCompetition'){
+    const name=clean(body.name,160)
+    if(!name)return Response.json({error:'Give the competition a name.'},{status:400})
+    const compContentIssue=moderationIssue(body.name)||moderationIssue(body.description)
+    if(compContentIssue)return Response.json({error:compContentIssue},{status:400})
+    const datePattern=/^\d{4}-\d{2}-\d{2}$/,startDate=clean(body.startDate,10),endDate=clean(body.endDate,10)
+    if(!datePattern.test(startDate)||!datePattern.test(endDate))return Response.json({error:'Choose a valid start and end date.'},{status:400})
+    if(endDate<startDate)return Response.json({error:'The competition must end on or after it starts.'},{status:400})
+    const tiers=(Array.isArray(body.tiers)?body.tiers:[]).map(t=>({name:clean(t?.name,60),minHours:Math.max(1,Math.min(100000,Math.round(Number(t?.minHours))||0))})).filter(t=>t.name&&t.minHours>0)
+    if(!tiers.length)return Response.json({error:'Add at least one award tier with a name and hour threshold.'},{status:400})
+    const id=clean(body.id,80)||crypto.randomUUID(), existing=body.id?await db.prepare('SELECT id,created_at FROM award_competitions WHERE id=? AND organization_id=?').bind(id,organization.id).first():null
+    if(body.id&&!existing)return Response.json({error:'Competition not found.'},{status:404})
+    await db.prepare(`INSERT INTO award_competitions (id,organization_id,name,description,start_date,end_date,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=excluded.description,start_date=excluded.start_date,end_date=excluded.end_date,updated_at=excluded.updated_at`)
+      .bind(id,organization.id,name,clean(body.description,600)||null,startDate,endDate,existing?.created_at||now,now).run()
+    // Tiers are small in number and fully replaced on every save (no partial
+    // tier edits from the UI), so drop-and-reinsert is simpler than diffing.
+    await db.prepare('DELETE FROM award_tiers WHERE competition_id=?').bind(id).run()
+    for(const [index,t] of tiers.entries())await db.prepare('INSERT INTO award_tiers (id,competition_id,name,min_hours,sort_order,created_at) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(),id,t.name,t.minHours,index,now).run()
+    return Response.json({ok:true})
+  }
+  if(action==='deleteCompetition'){
+    const id=clean(body.id,80)
+    // Scope to this org before touching award_tiers - without this check a
+    // caller could pass another organization's competition id and wipe its
+    // tiers even though the award_competitions row itself stays protected
+    // by the AND organization_id=? below (caught in review).
+    const owned=await db.prepare('SELECT id FROM award_competitions WHERE id=? AND organization_id=?').bind(id,organization.id).first()
+    if(!owned)return Response.json({error:'Competition not found.'},{status:404})
+    await db.prepare('DELETE FROM award_tiers WHERE competition_id=?').bind(id).run()
+    await db.prepare('DELETE FROM award_competitions WHERE id=? AND organization_id=?').bind(id,organization.id).run()
+    return Response.json({ok:true})
   }
   if(action==='reviewHours'){
     // P0-01: an org that isn't approved yet shouldn't be able to verify hours -
