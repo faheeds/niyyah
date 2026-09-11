@@ -10,6 +10,19 @@ export async function GET(request){
   const slug=String(searchParams.get('slug')||'').trim(),id=String(searchParams.get('id')||'').trim()
   if(!slug&&!id)return Response.json({error:'Missing organization.'},{status:400})
   const db=await prepareCommunityTables()
+  // P1-17: look the organization up WITHOUT the approved-only filter first,
+  // so a pending org (created but not yet reviewed) can be told apart from
+  // a link that never existed - previously both returned the identical
+  // generic 404, which is exactly the confusion a user reported after
+  // sharing their own freshly-created organization's link. The approval
+  // gate itself is unchanged: a pending org still gets nothing back but
+  // its name and pending status - never its events, description, logo,
+  // safeguarding contact or competitions.
+  const lookup=slug
+    ? await db.prepare('SELECT id,name,status FROM organizations WHERE slug=?').bind(slug).first()
+    : await db.prepare('SELECT id,name,status FROM organizations WHERE id=?').bind(id).first()
+  if(!lookup)return Response.json({error:'Organization not found.'},{status:404})
+  if(lookup.status!=='approved')return Response.json({pending:true,organization:{name:lookup.name}})
   const organization=slug
     ? await db.prepare("SELECT id,name,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug FROM organizations WHERE slug=? AND status='approved'").bind(slug).first()
     : await db.prepare("SELECT id,name,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug FROM organizations WHERE id=? AND status='approved'").bind(id).first()

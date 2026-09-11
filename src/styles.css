@@ -213,6 +213,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-notfound{max-width:520px;margin:80px auto;text-align:center;padding:0 20px}
 .org-landing-notfound h1{font:800 30px 'Manrope';margin:0 0 10px}
 .org-landing-notfound p{color:var(--muted);margin:0 0 22px}
+/* P1-17: the pending-review state - same shell as org-landing-notfound,
+   distinguished by a small status badge rather than a whole new layout. */
+.org-landing-pending-badge{display:inline-flex;align-items:center;gap:6px;background:var(--mint);color:var(--green-strong);border-radius:99px;padding:7px 14px;font-size:11px;font-weight:800;margin-bottom:16px}
 .org-landing-leaderboard{max-width:1000px;margin:0 auto;padding:44px max(24px,calc((100vw - 1000px)/2)) 0}
 .org-landing-leaderboard h2{display:flex;align-items:center;gap:9px;font:800 26px 'Manrope';margin:0 0 20px;color:var(--ink)}
 .org-landing-leaderboard h2 svg{color:#b07717}
