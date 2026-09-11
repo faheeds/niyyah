@@ -3,7 +3,8 @@ import { prepareCommunityTables } from '../../../db/index.js'
 import { resolveOrganizationAccess } from '../../org-admins.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
 import { moderationIssue } from '../../lib/content-filter.js'
-import { sendApplicationStatusUpdate } from '../../lib/notify.js'
+import { sendApplicationStatusUpdate, sendNewOrgApprovalRequest } from '../../lib/notify.js'
+import { ADMIN_EMAILS } from '../../admin-emails.js'
 import { slugify } from '../../lib/org-slug.js'
 import { rankStandings } from '../../lib/awards.js'
 import { draftEvent } from '../../lib/ai-draft.js'
@@ -123,6 +124,14 @@ export async function POST(request){
     await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,slug,logo_data_url,brand_color,status,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,logo_data_url=excluded.logo_data_url,brand_color=excluded.brand_color,updated_at=excluded.updated_at`)
       .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),slug,logoDataUrl||null,brandColor||null,organization?.status||'pending',organization?.created_at||now,now).run()
+    // P1-20: `organization` here is whatever resolveOrganizationAccess found
+    // BEFORE this insert/upsert ran, so `!organization` means this call just
+    // created the org row for the first time (as opposed to an existing
+    // organization editing its own profile). Admins previously had no way to
+    // know a new organization was waiting in their approve/reject queue
+    // (app/api/admin-organizations/route.js) other than checking it
+    // themselves - this tells every admin the moment one shows up.
+    if(!organization)await sendNewOrgApprovalRequest({to:ADMIN_EMAILS,organizationName:clean(body.name,160),organizerEmail:user.email})
     return Response.json({ok:true,slug})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})

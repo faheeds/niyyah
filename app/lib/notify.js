@@ -32,7 +32,8 @@ async function sendEmail({ to, subject, text }) {
     console.log(`[notify] RESEND_API_KEY not set - skipping email to ${to}: ${subject}`)
     return { sent: false, reason: 'not_configured' }
   }
-  if (!to || !subject || !text) return { sent: false, reason: 'invalid_input' }
+  const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean)
+  if (!recipients.length || !subject || !text) return { sent: false, reason: 'invalid_input' }
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -42,7 +43,7 @@ async function sendEmail({ to, subject, text }) {
       },
       body: JSON.stringify({
         from: env.RESEND_FROM_ADDRESS || 'Niyyah <notifications@niyyah.app>',
-        to: [to],
+        to: recipients,
         subject,
         text,
       }),
@@ -129,4 +130,29 @@ export function buildEventReminder({ name, eventTitle, organizationName, startAt
 }
 export function sendEventReminder({ to, ...rest }) {
   return sendEmail({ to, ...buildEventReminder(rest) })
+}
+
+// P1-20: notifies every Niyyah admin (app/admin-emails.js's ADMIN_EMAILS)
+// when a new organization signs up, so the approve/reject queue at
+// app/api/admin-organizations/route.js doesn't rely on someone remembering
+// to check it. app/api/organizer/route.js sends this exactly once, right
+// after the very first saveOrganization action creates the organization row
+// - never on a later profile edit, since organizations start and stay
+// 'pending' between edits until an admin acts.
+export function buildNewOrgPendingReview({ organizationName, organizerEmail }) {
+  const subject = `New organization awaiting review: ${organizationName}`
+  const text = [
+    'A new organization signed up on Niyyah and is waiting for approval.',
+    '',
+    `Organization: ${organizationName}`,
+    `Signed up by: ${organizerEmail || 'unknown'}`,
+    '',
+    'Review it in the admin panel to approve or reject it: /admin',
+    '',
+    '— Niyyah',
+  ].join('\n')
+  return { subject, text }
+}
+export function sendNewOrgApprovalRequest({ to, ...rest }) {
+  return sendEmail({ to, ...buildNewOrgPendingReview(rest) })
 }
