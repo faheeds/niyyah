@@ -166,6 +166,15 @@ export async function prepareCommunityTables() {
       slug TEXT,
       logo_data_url TEXT,
       brand_color TEXT,
+      theme_preset TEXT NOT NULL DEFAULT 'vibrant',
+      tagline TEXT,
+      mission_quote TEXT,
+      mission_author TEXT,
+      show_stats INTEGER NOT NULL DEFAULT 1,
+      show_gallery INTEGER NOT NULL DEFAULT 1,
+      show_leaderboard INTEGER NOT NULL DEFAULT 1,
+      cover_photo_url TEXT,
+      gallery_json TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -370,6 +379,31 @@ export async function prepareCommunityTables() {
     }
   }
   await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug)').run()
+  // organizations predates the page-design columns (added for P2-01 - a
+  // configurable look for branded organization landing pages, see
+  // app/org/org-landing-client.jsx). Same tolerate-duplicate-column pattern
+  // as slug/logo_data_url/brand_color above. cover_photo_url and
+  // gallery_json are added now but stay unused until R2 object storage is
+  // set up (organizer uploads still go through logo_data_url's
+  // data-URL-in-the-row approach only for the logo, which is small enough
+  // to be safe) - adding the columns now avoids a second migration later.
+  for (const stmt of [
+    "ALTER TABLE organizations ADD COLUMN theme_preset TEXT NOT NULL DEFAULT 'vibrant'",
+    'ALTER TABLE organizations ADD COLUMN tagline TEXT',
+    'ALTER TABLE organizations ADD COLUMN mission_quote TEXT',
+    'ALTER TABLE organizations ADD COLUMN mission_author TEXT',
+    'ALTER TABLE organizations ADD COLUMN show_stats INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE organizations ADD COLUMN show_gallery INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE organizations ADD COLUMN show_leaderboard INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE organizations ADD COLUMN cover_photo_url TEXT',
+    'ALTER TABLE organizations ADD COLUMN gallery_json TEXT',
+  ]) {
+    try {
+      await db.prepare(stmt).run()
+    } catch (e) {
+      if (!String(e).toLowerCase().includes('duplicate column')) throw e
+    }
+  }
   // event_signup_slots predates reminder_sent_at (added for P1-01b - the
   // Cron Trigger Worker in workers/reminders/ stamps this the moment it
   // sends a reminder, so a slot is never reminded twice even though the

@@ -1,10 +1,25 @@
 'use client'
 import { useEffect,useState } from 'react'
-import { ArrowLeft,ArrowRight,Ban,Building2,CalendarDays,Check,Clock3,Copy,Download,Globe,HeartHandshake,LoaderCircle,Mail,MapPin,Pencil,Phone,Plane,Plus,Share2,ShieldCheck,Sparkles,Star,Trash2,UserCheck,UserCog,Users } from 'lucide-react'
+import { ArrowLeft,ArrowRight,Ban,Building2,CalendarDays,Check,Clock3,Copy,Download,Globe,HeartHandshake,Image as ImageIcon,LoaderCircle,Mail,MapPin,Palette,Pencil,Phone,Plane,Plus,Share2,ShieldCheck,Sparkles,Star,Trash2,UserCheck,UserCog,Users } from 'lucide-react'
 
-const blankOrg={name:'',organizationType:'Charity',registrationNumber:'',email:'',phone:'',website:'',address:'',postcode:'',description:'',safeguardingName:'',safeguardingEmail:'',logoDataUrl:'',brandColor:''}
+const blankOrg={name:'',organizationType:'Charity',registrationNumber:'',email:'',phone:'',website:'',address:'',postcode:'',description:'',safeguardingName:'',safeguardingEmail:'',logoDataUrl:'',brandColor:'',themePreset:'vibrant',tagline:'',missionQuote:'',missionAuthor:'',showStats:true,showGallery:true,showLeaderboard:true,coverPhotoUrl:'',gallery:[]}
+// P2-01: the three org-page-design looks (see the design concept at
+// claude.ai/code/artifact/b1fe9137-b441-49ec-9b6f-66055697cfc3) - organizers
+// pick one in the Page design card; org-landing-client.jsx renders the hero
+// differently per preset. 'vibrant' is the default (today's only look), so
+// an organization that never visits the new card is unaffected.
+const THEME_PRESETS=[
+  {id:'warm',label:'Warm Community',blurb:'Full-bleed cover photo, identity anchored bottom-left.',swatch:'linear-gradient(135deg,#a9714a,#7a4a2f)'},
+  {id:'minimal',label:'Modern Minimal',blurb:'Editorial split layout with a photo card.',swatch:'linear-gradient(135deg,#e7f0ea,#cfe2d8)'},
+  {id:'vibrant',label:'Vibrant Impact',blurb:'Bold color-block hero with stats woven in.',swatch:'linear-gradient(135deg,#1d5a48,#123a2f)'},
+]
 const blankEvent={title:'',summary:'',interest:'Volunteering',ageRange:'All ages',locationName:'',address:'',postcode:'',startAt:'',endAt:'',recurs:false,capacity:'',eventType:'volunteering',compensationType:'unpaid',payDetails:'',status:'draft',genderAppropriateness:'Any gender',locationPreference:'Local volunteers preferred',travelRequired:false,volunteersNeeded:10,autoPause:true,preferredInterests:'',volunteerNotes:''}
 const localDateTime=value=>{if(!value)return'';const match=String(value).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);return match?`${match[1]}T${match[2]}`:''}
+// P2-01: gallery_json is a plain JSON array of /api/org-images URLs (see
+// app/api/organizer/route.js's saveOrganization) - this only ever reads
+// back what that same save wrote, but a stray null/malformed value should
+// degrade to an empty gallery, never crash the dashboard.
+const parseGalleryJson=raw=>{if(!raw)return[];try{const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed.filter(url=>typeof url==='string'):[]}catch{return[]}}
 const blankCompetition={name:'',description:'',startDate:'',endDate:'',tiers:[{name:'Bronze',minHours:'10'},{name:'Silver',minHours:'25'},{name:'Gold',minHours:'50'}]}
 // P1-13: the first-time "Go live" wizard splits organization creation into
 // four bite-sized steps instead of one long form (see the Go-Live
@@ -22,7 +37,7 @@ const stepComplete=(id,orgState)=>{const step=ONBOARDING_STEPS.find(s=>s.id===id
 
 export default function OrganizerClient({user}){
   const [data,setData]=useState(null),[tab,setTab]=useState('overview'),[org,setOrg]=useState({...blankOrg,email:user.email}),[event,setEvent]=useState(blankEvent),[competition,setCompetition]=useState(blankCompetition),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[domainInput,setDomainInput]=useState(''),[inviteEmail,setInviteEmail]=useState(''),[inviteRole,setInviteRole]=useState('staff'),[draftText,setDraftText]=useState(''),[wizardStep,setWizardStep]=useState(1),[justLaunched,setJustLaunched]=useState(false),[onboarding,setOnboarding]=useState(false)
-  const load=async()=>{const r=await fetch('/api/organizer'),json=await r.json();setData(json);if(json.organization)setOrg({name:json.organization.name,organizationType:json.organization.organization_type,registrationNumber:json.organization.registration_number||'',email:json.organization.email,phone:json.organization.phone,website:json.organization.website||'',address:json.organization.address,postcode:json.organization.postcode,description:json.organization.description,safeguardingName:json.organization.safeguarding_name,safeguardingEmail:json.organization.safeguarding_email,logoDataUrl:json.organization.logo_data_url||'',brandColor:json.organization.brand_color||''})}
+  const load=async()=>{const r=await fetch('/api/organizer'),json=await r.json();setData(json);if(json.organization)setOrg({name:json.organization.name,organizationType:json.organization.organization_type,registrationNumber:json.organization.registration_number||'',email:json.organization.email,phone:json.organization.phone,website:json.organization.website||'',address:json.organization.address,postcode:json.organization.postcode,description:json.organization.description,safeguardingName:json.organization.safeguarding_name,safeguardingEmail:json.organization.safeguarding_email,logoDataUrl:json.organization.logo_data_url||'',brandColor:json.organization.brand_color||'',themePreset:json.organization.theme_preset||'vibrant',tagline:json.organization.tagline||'',missionQuote:json.organization.mission_quote||'',missionAuthor:json.organization.mission_author||'',showStats:json.organization.show_stats!==0,showGallery:json.organization.show_gallery!==0,showLeaderboard:json.organization.show_leaderboard!==0,coverPhotoUrl:json.organization.cover_photo_url||'',gallery:parseGalleryJson(json.organization.gallery_json)})}
   useEffect(()=>{load()},[])
   // P1-15: `onboarding` (not `!data.organization`) now decides whether the
   // wizard/finale shell owns the screen. This is deliberately a separate
@@ -87,6 +102,59 @@ const removeTierRow=index=>setCompetition({...competition,tiers:competition.tier
     }
     reader.readAsDataURL(file)
   }
+  // P2-01: shared canvas resize for cover/gallery photos, same technique as
+  // handleLogoFile above but larger (these are real hero/gallery images, not
+  // a small square avatar) and JPEG rather than PNG, since photos compress
+  // far better as JPEG and these no longer need to survive round-tripping
+  // through a database row (R2 stores the bytes directly).
+  const resizeImageFile=(file,maxSize)=>new Promise((resolve,reject)=>{
+    const reader=new FileReader()
+    reader.onload=()=>{
+      const img=new Image()
+      img.onload=()=>{
+        const scale=Math.min(1,maxSize/Math.max(img.width,img.height))
+        const canvas=document.createElement('canvas')
+        canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale)
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height)
+        resolve(canvas.toDataURL('image/jpeg',0.85))
+      }
+      img.onerror=()=>reject(new Error('Could not read that image.'))
+      img.src=reader.result
+    }
+    reader.onerror=()=>reject(new Error('Could not read that image.'))
+    reader.readAsDataURL(file)
+  })
+  // Deliberately NOT the shared send() helper: that also reloads the whole
+  // dashboard from the server and shows "Saved successfully.", which would
+  // both be wrong here (nothing on the organizations row has changed yet -
+  // the photo only lands there once the Page design card's own Save is
+  // clicked) and would blow away any other unsaved edit sitting in `org`.
+  const uploadOrgImage=async(dataUrl,purpose)=>{
+    setBusy(true);setNotice('')
+    try{
+      const r=await fetch('/api/organizer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'uploadOrgImage',purpose,dataUrl})}),json=await r.json()
+      if(!r.ok){setNotice(json.error||'We could not upload that image.');return null}
+      return json.url
+    }catch{
+      setNotice('We could not upload that image.');return null
+    }finally{setBusy(false)}
+  }
+  const handleCoverPhotoFile=async e=>{
+    const file=e.target.files?.[0];e.target.value='';if(!file)return
+    const dataUrl=await resizeImageFile(file,1600).catch(()=>{setNotice('Could not read that image.');return null})
+    if(!dataUrl)return
+    const url=await uploadOrgImage(dataUrl,'cover')
+    if(url)setOrg(prev=>({...prev,coverPhotoUrl:url}))
+  }
+  const handleGalleryFile=async e=>{
+    const file=e.target.files?.[0];e.target.value='';if(!file)return
+    if(org.gallery.length>=4){setNotice('You can add up to 4 photos — remove one first.');return}
+    const dataUrl=await resizeImageFile(file,1000).catch(()=>{setNotice('Could not read that image.');return null})
+    if(!dataUrl)return
+    const url=await uploadOrgImage(dataUrl,'gallery')
+    if(url)setOrg(prev=>({...prev,gallery:[...prev.gallery,url]}))
+  }
+  const removeGalleryPhoto=index=>setOrg(prev=>({...prev,gallery:prev.gallery.filter((_,i)=>i!==index)}))
   const copyPublicLink=async()=>{await navigator.clipboard.writeText(`${location.origin}/org?slug=${data.organization.slug}`);setNotice('Page link copied — share it anywhere.')}
   const exportHoursCsv=()=>{const rows=[['Volunteer','Role','Event','Hours','Date','Status'],...data.hours.map(item=>[item.display_name||'Niyyah volunteer',item.role||'',item.event_title||'',item.hours,item.activity_date,item.status])],csv=rows.map(row=>row.map(cell=>{const value=String(cell??'');return /[",\n]/.test(value)?`"${value.replace(/"/g,'""')}"`:value}).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`volunteer-hours-${data.organization.name.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url)}
   if(!data)return <main className="member-loading"><LoaderCircle className="spin"/>Opening your organizer workspace…</main>
@@ -127,6 +195,35 @@ const removeTierRow=index=>setCompetition({...competition,tiers:competition.tier
     await load()}
   const copyAdminInvite=async token=>{await navigator.clipboard.writeText(`${location.origin}/organizer/accept-invite?token=${token}`);setNotice('Invite link copied — send it to your teammate.')}
   const orgForm=<form className="org-form" onSubmit={saveOrg}><div className="field-grid two"><label>Organization name<input value={org.name} onChange={e=>setOrg({...org,name:e.target.value})} required/></label><label>Organization type<select value={org.organizationType} onChange={e=>setOrg({...org,organizationType:e.target.value})}><option>Charity</option><option>Community group</option><option>Faith organization</option><option>Social enterprise</option><option>School or college</option><option>Other</option></select></label><label>Registration number <small>Optional</small><input value={org.registrationNumber} onChange={e=>setOrg({...org,registrationNumber:e.target.value})}/></label><label>Public email<input type="email" value={org.email} onChange={e=>setOrg({...org,email:e.target.value})} required/></label><label>Phone<input value={org.phone} onChange={e=>setOrg({...org,phone:e.target.value})} required/></label><label>Website <small>Optional</small><input value={org.website} onChange={e=>setOrg({...org,website:e.target.value})} placeholder="https://"/></label><label>Address<input value={org.address} onChange={e=>setOrg({...org,address:e.target.value})} required/></label><label>Zip code<input value={org.postcode} onChange={e=>setOrg({...org,postcode:e.target.value})} required/></label></div><label>About the organization<textarea value={org.description} onChange={e=>setOrg({...org,description:e.target.value})} required/></label><div className="field-grid two"><label>Logo <small>Optional &middot; shown on your public page</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoFile}/></label><label>Brand color <small>Optional</small><input type="color" value={org.brandColor||'#174c3d'} onChange={e=>setOrg({...org,brandColor:e.target.value})}/></label></div>{org.logoDataUrl&&<div className="logo-preview"><img src={org.logoDataUrl} alt="Organization logo preview"/><button type="button" className="secondary-action" onClick={()=>setOrg({...org,logoDataUrl:''})}>Remove logo</button></div>}<div className="field-grid two"><label>Safeguarding contact<input value={org.safeguardingName} onChange={e=>setOrg({...org,safeguardingName:e.target.value})} required/></label><label>Safeguarding email<input type="email" value={org.safeguardingEmail} onChange={e=>setOrg({...org,safeguardingEmail:e.target.value})} required/></label></div><button className="profile-save" disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Check size={16}/>} {data.organization?'Save organization':'Create organizer account'}</button></form>
+  // P2-01: a configurable look for the public page - three theme presets
+  // plus tagline/mission/cover-photo/gallery/toggles, all optional. Its own
+  // card and its own Save button (same saveOrg handler and same `org`
+  // state as the profile form above, so either Save button persists both
+  // forms together) rather than folding into orgForm, so this stays a
+  // clearly separate, skippable step instead of one enormous form.
+  const pageDesignCard=<form className="org-form page-design-form" onSubmit={saveOrg}>
+    <div className="preset-picker">{THEME_PRESETS.map(preset=><button key={preset.id} type="button" className={`preset-swatch${org.themePreset===preset.id?' sel':''}`} onClick={()=>setOrg({...org,themePreset:preset.id})}><span className="sw" style={{background:preset.swatch}}/><b>{preset.label}</b><small>{preset.blurb}</small></button>)}</div>
+    <div className="field-grid two">
+      <label>Tagline <small>Optional &middot; one short line under your name</small><input value={org.tagline} onChange={e=>setOrg({...org,tagline:e.target.value})} placeholder="Volunteers showing up for our community" maxLength={140}/></label>
+      <label>Mission quote author <small>Optional</small><input value={org.missionAuthor} onChange={e=>setOrg({...org,missionAuthor:e.target.value})} placeholder="e.g. Amina, Program Lead"/></label>
+    </div>
+    <label>Mission quote <small>Optional &middot; one sentence, set apart in type</small><textarea value={org.missionQuote} onChange={e=>setOrg({...org,missionQuote:e.target.value})} maxLength={320} placeholder="Every Friday, we turn a spare afternoon into a hot meal for forty families."/></label>
+    <label>Cover photo <small>Optional &middot; shown behind your page's hero</small>
+      <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleCoverPhotoFile} disabled={busy}/>
+    </label>
+    {org.coverPhotoUrl&&<div className="cover-photo-preview"><img src={org.coverPhotoUrl} alt="Cover photo preview"/><button type="button" className="secondary-action" onClick={()=>setOrg({...org,coverPhotoUrl:''})}><Trash2 size={13}/> Remove cover photo</button></div>}
+    <label>Photo gallery <small>Optional &middot; up to 4 photos from your events</small></label>
+    <div className="gallery-thumbs">
+      {org.gallery.map((url,index)=><div key={url} className="gallery-thumb"><img src={url} alt={`Gallery photo ${index+1}`}/><button type="button" onClick={()=>removeGalleryPhoto(index)} aria-label="Remove photo"><Trash2 size={12}/></button></div>)}
+      {org.gallery.length<4&&<label className="gallery-add"><ImageIcon size={16}/> Add photo<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleGalleryFile} disabled={busy}/></label>}
+    </div>
+    <div className="requirement-toggles page-design-toggles">
+      <label><input type="checkbox" checked={org.showStats} onChange={e=>setOrg({...org,showStats:e.target.checked})}/><span><b>Show impact stats</b>Volunteers, hours and events, computed automatically — hidden if there's nothing to show yet.</span></label>
+      <label><input type="checkbox" checked={org.showGallery} onChange={e=>setOrg({...org,showGallery:e.target.checked})}/><span><b>Show photo gallery</b>Hidden automatically until at least one photo is added above.</span></label>
+      <label><input type="checkbox" checked={org.showLeaderboard} onChange={e=>setOrg({...org,showLeaderboard:e.target.checked})}/><span><b>Show competition leaderboard</b>Only relevant if you're running a volunteering competition.</span></label>
+    </div>
+    <button className="profile-save" disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Check size={16}/>} Save page design</button>
+  </form>
   // P1-13: the pending-note + link + share templates block, shared between
   // the Organization-profile-tab "Share your page" card and the wizard's
   // finale screen (shown immediately after finishOnboarding succeeds) -
@@ -204,6 +301,6 @@ Questions? Reply to this email.
     {tab==='applicants'&&<section className="member-card wide applicant-board"><div className="card-title"><span><Users size={15}/></span><div><h2>Coverage & ranked volunteers</h2><p>Applicants are ranked by interest match, proximity and verified Niyyah hours. Review the full profile before making a decision.</p></div></div>{data.events.filter(x=>x.event_type==='volunteering').map(item=><div className="coverage-row" key={item.id}><div><b>{item.title}</b><span>{item.accepted_count||0} accepted · {item.signup_count||0} active sign-ups</span></div><div className="coverage-meter"><i style={{width:`${Math.min(100,Math.round((Number(item.accepted_count||0)/Number(item.volunteers_needed||item.capacity||1))*100))}%`}}/></div><strong>{item.accepted_count>=Number(item.volunteers_needed||item.capacity||1)?'Covered':`${Math.max(0,Number(item.volunteers_needed||item.capacity||1)-Number(item.accepted_count||0))} needed`}</strong></div>)}<div className="applicant-list">{data.applications.length?data.applications.map((item,index)=><article key={item.id}><div className="rank-number">#{index+1}</div><div className="mini-avatar">{item.applicant_name.slice(0,1)}</div><div className="applicant-details"><div className="applicant-heading"><h3>{item.applicant_name}</h3><span className="match-score"><Star size={13}/>{item.match_score}% match</span></div>{item.ranking_reason&&<p className="ranking-reason">{item.ranking_reason}</p>}<p>{item.event_title}{item.selected_date?` · ${item.selected_date} at ${item.selected_time}`:''}</p><span><MapPin size={12}/>{item.volunteer_postcode||'Location not provided'} · {item.verified_hours||0} verified hours</span>{item.bio&&<small>{item.bio}</small>}<div className="contact-links"><a href={`mailto:${item.applicant_email}`}><Mail size={13}/>{item.applicant_email}</a>{item.phone&&<a href={`tel:${item.phone}`}><Phone size={13}/>{item.phone}</a>}{item.instagram&&<span>@{item.instagram.replace(/^@/,'')}</span>}{item.travel_required?<span><Plane size={13}/>Travel required</span>:null}</div></div><div className="review-actions"><select value={item.status} onChange={e=>send({action:'reviewApplication',applicationId:item.id,status:e.target.value})}><option value="new">New</option><option value="shortlisted">Shortlisted</option><option value="accepted">Accepted</option><option value="declined">Declined</option></select></div></article>):<p className="empty-copy">Applicants will appear here after members request a volunteer shift.</p>}</div></section>}
     {tab==='roster'&&<div className="organizer-grid">{canManage&&<section className="member-card"><div className="card-title"><span><Globe size={15}/></span><div><h2>School email domains</h2><p>Volunteers who sign up with an email at these domains are automatically added to your roster as students — approved right away if they sign in with a verified Google account, or held here for your approval otherwise.</p></div></div><form className="friend-search" onSubmit={addDomain}><input value={domainInput} onChange={e=>setDomainInput(e.target.value)} placeholder="e.g. medinaacademy.org"/><button disabled={busy}><Plus size={15}/> Add</button></form><div className="roster-domains">{data.emailDomains.length?data.emailDomains.map(d=><span key={d.domain}>{d.domain}<button onClick={()=>send({action:'removeEmailDomain',domain:d.domain})} aria-label={`Remove ${d.domain}`}><Trash2 size={12}/></button></span>):<p className="empty-copy">No domains registered yet.</p>}</div></section>}<section className="member-card wide hours-queue"><div className="card-title"><span><UserCheck size={15}/></span><div><h2>Roster</h2><p>Approving a volunteer here will be required before their logged hours for your organization can be approved.</p></div></div>{data.members.length?data.members.map(item=><article key={item.id}><div className="mini-avatar">{(item.display_name||'V').slice(0,1)}</div><div><h3>{item.display_name}</h3><p>{item.email} · {item.tag}</p></div>{item.status==='pending'?<div className="review-actions"><button onClick={()=>send({action:'removeMember',membershipId:item.id})}>Decline</button><button onClick={()=>send({action:'approveMember',membershipId:item.id})}><Check size={14}/> Approve</button></div>:<div className="review-actions"><span className={`event-status ${item.status}`}>{item.status}</span>{item.status!=='removed'&&<button onClick={()=>send({action:'removeMember',membershipId:item.id})}>Remove</button>}</div>}</article>):<p className="empty-copy">No one has joined your roster yet.</p>}</section></div>}
     {tab==='admins'&&<div className="organizer-grid"><section className="member-card"><div className="card-title"><span><UserCog size={15}/></span><div><h2>Invite an admin</h2><p>Admins can manage events, applications and organization settings. Staff can only approve roster members and volunteer hours.</p></div></div><form className="org-form" onSubmit={inviteAdmin}><label>Email<input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="teammate@example.com" required/></label><label>Role<select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}><option value="staff">Staff</option><option value="admin">Admin</option></select></label><button className="profile-save" disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Mail size={16}/>} Send invite</button></form></section><section className="member-card wide hours-queue"><div className="card-title"><span><UserCog size={15}/></span><div><h2>Admins & staff</h2><p>Share the invite link with your teammate however you like — email, text, anything. Whoever opens it and signs in claims the seat, so copy it again anytime from a pending row below.</p></div></div>{data.admins.length?data.admins.map(item=><article key={item.id}><div className="mini-avatar">{(item.display_name||item.email||'A').slice(0,1).toUpperCase()}</div><div><h3>{item.display_name||item.email}</h3><p>{item.email} · {item.status==='invited'?'invite pending':'active'}</p></div><div className="review-actions">{item.status==='invited'&&<button onClick={()=>copyAdminInvite(item.invite_token)}><Copy size={14}/> Copy link</button>}<select value={item.role} onChange={e=>send({action:'updateAdminRole',adminId:item.id,role:e.target.value})}><option value="staff">Staff</option><option value="admin">Admin</option></select><button onClick={()=>send({action:'removeAdmin',adminId:item.id})}>Remove</button></div></article>):<p className="empty-copy">You’re the only one with access right now.</p>}</section></div>}
-    {tab==='organization'&&<div className="organization-profile-layout"><section className="member-card org-profile-card"><span className="profile-avatar"><Building2/></span><h2>{data.organization.name}</h2><p>{data.organization.description}</p><dl><div><dt>Upcoming</dt><dd>{upcomingEvents.length}</dd></div><div><dt>Past events</dt><dd>{pastEvents.length}</dd></div><div><dt>Volunteer sign-ups</dt><dd>{data.applications.length}</dd></div><div><dt>Hours approved</dt><dd>{approvedHoursTotal}</dd></div></dl><small>{data.organization.address} · {data.organization.postcode}</small><small>{data.organization.email} · {data.organization.phone}</small>{data.organization.slug&&<div className="public-link-row"><span><Globe size={13}/> {typeof location!='undefined'?location.host:'niyyah.app'}/org?slug={data.organization.slug}</span><button type="button" className="secondary-action" onClick={copyPublicLink}><Copy size={13}/> Copy link</button><a className="secondary-action" href={`/org?slug=${data.organization.slug}`} target="_blank" rel="noreferrer">View page</a></div>}</section><section className="member-card"><div className="card-title"><span><Building2 size={15}/></span><div><h2>Edit organization profile</h2><p>Keep your public, contact and safeguarding details up to date.</p></div></div>{orgForm}</section></div>}{tab==='organization'&&data.organization.slug&&<section className="member-card wide share-launch-card"><div className="card-title"><span><Share2 size={15}/></span><div><h2>Share your page</h2><p>Your public Niyyah page is ready &mdash; share it with volunteers, parents or your community.</p></div></div>{shareLaunchInner}</section>}</>}
+    {tab==='organization'&&<div className="organization-profile-layout"><section className="member-card org-profile-card"><span className="profile-avatar"><Building2/></span><h2>{data.organization.name}</h2><p>{data.organization.description}</p><dl><div><dt>Upcoming</dt><dd>{upcomingEvents.length}</dd></div><div><dt>Past events</dt><dd>{pastEvents.length}</dd></div><div><dt>Volunteer sign-ups</dt><dd>{data.applications.length}</dd></div><div><dt>Hours approved</dt><dd>{approvedHoursTotal}</dd></div></dl><small>{data.organization.address} · {data.organization.postcode}</small><small>{data.organization.email} · {data.organization.phone}</small>{data.organization.slug&&<div className="public-link-row"><span><Globe size={13}/> {typeof location!='undefined'?location.host:'niyyah.app'}/org?slug={data.organization.slug}</span><button type="button" className="secondary-action" onClick={copyPublicLink}><Copy size={13}/> Copy link</button><a className="secondary-action" href={`/org?slug=${data.organization.slug}`} target="_blank" rel="noreferrer">View page</a></div>}</section><section className="member-card"><div className="card-title"><span><Building2 size={15}/></span><div><h2>Edit organization profile</h2><p>Keep your public, contact and safeguarding details up to date.</p></div></div>{orgForm}</section></div>}{tab==='organization'&&<section className="member-card wide page-design-card"><div className="card-title"><span><Palette size={15}/></span><div><h2>Page design</h2><p>Choose a look for your public page, then fill in what you have — everything here is optional.</p></div></div>{pageDesignCard}</section>}{tab==='organization'&&data.organization.slug&&<section className="member-card wide share-launch-card"><div className="card-title"><span><Share2 size={15}/></span><div><h2>Share your page</h2><p>Your public Niyyah page is ready &mdash; share it with volunteers, parents or your community.</p></div></div>{shareLaunchInner}</section>}</>}
   </main>
 }

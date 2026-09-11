@@ -23,16 +23,41 @@ export async function GET(request){
     : await db.prepare('SELECT id,name,status FROM organizations WHERE id=?').bind(id).first()
   if(!lookup)return Response.json({error:'Organization not found.'},{status:404})
   if(lookup.status!=='approved')return Response.json({pending:true,organization:{name:lookup.name}})
+  // P2-01: page-design fields (theme_preset, tagline, mission_quote/author,
+  // the three show_* toggles, cover_photo_url, gallery_json) ride along with
+  // the rest of the public profile - org-landing-client.jsx decides what to
+  // render from them, same as it already does with logo_data_url/brand_color.
   const organization=slug
-    ? await db.prepare("SELECT id,name,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug FROM organizations WHERE slug=? AND status='approved'").bind(slug).first()
-    : await db.prepare("SELECT id,name,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug FROM organizations WHERE id=? AND status='approved'").bind(id).first()
+    ? await db.prepare("SELECT id,name,organization_type,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug,theme_preset,tagline,mission_quote,mission_author,show_stats,show_gallery,show_leaderboard,cover_photo_url,gallery_json FROM organizations WHERE slug=? AND status='approved'").bind(slug).first()
+    : await db.prepare("SELECT id,name,organization_type,description,website,logo_data_url,brand_color,safeguarding_name,safeguarding_email,slug,theme_preset,tagline,mission_quote,mission_author,show_stats,show_gallery,show_leaderboard,cover_photo_url,gallery_json FROM organizations WHERE id=? AND status='approved'").bind(id).first()
   if(!organization)return Response.json({error:'Organization not found.'},{status:404})
   const events=await db.prepare(`SELECT e.*,v.compensation_type,v.pay_details FROM organization_events e
     LEFT JOIN volunteer_opportunities v ON v.event_id=e.id
     WHERE e.organization_id=? AND e.status='published' ORDER BY e.start_at ASC LIMIT 40`).bind(organization.id).all()
   const occurrenced=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,start_at:occ.startAt,end_at:occ.endAt}}).sort((a,b)=>String(a.start_at).localeCompare(String(b.start_at)))
   const competitions=await loadActiveCompetitions(db,organization.id)
-  return Response.json({organization,events:occurrenced,competitions})
+  const stats=await loadImpactStats(db,organization.id)
+  return Response.json({organization,events:occurrenced,competitions,stats})
+}
+
+// P2-01: the optional impact-stats band on the public org page (see the
+// design concept at claude.ai/code/artifact/b1fe9137-b441-49ec-9b6f-66055697cfc3)
+// - three numbers computed from real data, never typed in by the organizer.
+// Volunteers and hours reuse the exact same "approved roster" / "approved
+// hours via volunteer_activity_organizations" definitions the organizer's
+// own dashboard already uses (app/api/organizer/route.js), so the public
+// number always matches what the organizer sees privately. Events counts
+// every published event ever, not just the upcoming ones `events` above is
+// capped to.
+async function loadImpactStats(db,organizationId){
+  const [volunteers,hours,eventCount]=await Promise.all([
+    db.prepare("SELECT COUNT(*) AS n FROM organization_members WHERE organization_id=? AND status='approved'").bind(organizationId).first(),
+    db.prepare(`SELECT COALESCE(SUM(a.hours),0) AS n FROM volunteer_activities a
+      JOIN volunteer_activity_organizations m ON m.activity_id=a.id
+      WHERE m.organization_id=? AND a.status='approved'`).bind(organizationId).first(),
+    db.prepare("SELECT COUNT(*) AS n FROM organization_events WHERE organization_id=? AND status='published'").bind(organizationId).first(),
+  ])
+  return {volunteers:Number(volunteers?.n||0),hours:Number(hours?.n||0),events:Number(eventCount?.n||0)}
 }
 
 // P1-11: shows currently-running competitions on the public org page. Unlike

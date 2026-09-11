@@ -9,9 +9,12 @@ import { slugify } from '../../lib/org-slug.js'
 import { rankStandings } from '../../lib/awards.js'
 import { draftEvent } from '../../lib/ai-draft.js'
 import { buildRankingReason } from '../../lib/ranking-reason.js'
+import { parseDataUrlImage, extensionForMime, buildOrgImageKey } from '../../lib/org-image.js'
+import { env } from 'cloudflare:workers'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
+const THEME_PRESETS=['warm','minimal','vibrant']
 // Owner and admin can edit events, applications, hour reviews and the email
 // domain list; staff is limited to roster/hours approval (see the action
 // gates in POST below). Admin management itself is owner-only.
@@ -105,7 +108,7 @@ export async function POST(request){
     // settings are owner/admin, never staff.
     if(organization&&!canManageOrg(role))return Response.json({error:'Only an owner or admin can edit organization settings.'},{status:403})
     if(requiredOrganization.some(key=>!clean(body[key],key==='description'?800:160)))return Response.json({error:'Complete all required organization details.'},{status:400})
-    const orgContentIssue=moderationIssue(body.name)||moderationIssue(body.description)||moderationIssue(body.safeguardingName)
+    const orgContentIssue=moderationIssue(body.name)||moderationIssue(body.description)||moderationIssue(body.safeguardingName)||moderationIssue(body.tagline)||moderationIssue(body.missionQuote)||moderationIssue(body.missionAuthor)
     if(orgContentIssue)return Response.json({error:orgContentIssue},{status:400})
     // P1-10: logo/brand color are optional and editable on every save.
     // logoDataUrl is a client-resized data: URL (see organizer-client.jsx) -
@@ -116,14 +119,35 @@ export async function POST(request){
       return Response.json({error:'Choose a smaller logo image.'},{status:400})
     const brandColor=clean(body.brandColor,7)
     if(brandColor&&!HEX_COLOR.test(brandColor))return Response.json({error:'Brand color must be a hex code like #174C3D.'},{status:400})
+    // P2-01: page-design settings - a theme preset (defaults to 'vibrant',
+    // today's only look, so existing organizations are unaffected until
+    // they visit the new Page design card), an optional tagline/mission
+    // quote, three show/hide toggles (default on), and the cover photo /
+    // gallery URLs uploadOrgImage below already wrote to R2. Booleans arrive
+    // as JSON true/false from organizer-client.jsx's toggle switches; only
+    // an explicit false turns a section off, so older clients that don't
+    // send these fields yet still default every toggle on.
+    const themePreset=THEME_PRESETS.includes(body.themePreset)?body.themePreset:'vibrant'
+    const tagline=clean(body.tagline,140)
+    const missionQuote=clean(body.missionQuote,320)
+    const missionAuthor=clean(body.missionAuthor,80)
+    const showStats=body.showStats===false?0:1
+    const showGallery=body.showGallery===false?0:1
+    const showLeaderboard=body.showLeaderboard===false?0:1
+    const coverPhotoUrl=clean(body.coverPhotoUrl,300)
+    // Gallery is capped at 4 photos here - the authoritative enforcement
+    // point - regardless of what the client sends, since uploadOrgImage
+    // below is a pure upload action that never touches this row itself.
+    const galleryUrls=Array.isArray(body.gallery)?body.gallery.filter(url=>typeof url==='string'&&url).slice(0,4):[]
+    const galleryJson=galleryUrls.length?JSON.stringify(galleryUrls):null
     const id=organization?.id||crypto.randomUUID()
     // Edit stays tied to whoever actually created the organization, even
     // when an admin (not the owner) is the one saving the form.
     const ownerUserId=organization?.owner_user_id||user.userId
     const slug=organization?.slug||await nextAvailableSlug(db,slugify(body.name))
-    await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,slug,logo_data_url,brand_color,status,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,logo_data_url=excluded.logo_data_url,brand_color=excluded.brand_color,updated_at=excluded.updated_at`)
-      .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),slug,logoDataUrl||null,brandColor||null,organization?.status||'pending',organization?.created_at||now,now).run()
+    await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,slug,logo_data_url,brand_color,theme_preset,tagline,mission_quote,mission_author,show_stats,show_gallery,show_leaderboard,cover_photo_url,gallery_json,status,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,logo_data_url=excluded.logo_data_url,brand_color=excluded.brand_color,theme_preset=excluded.theme_preset,tagline=excluded.tagline,mission_quote=excluded.mission_quote,mission_author=excluded.mission_author,show_stats=excluded.show_stats,show_gallery=excluded.show_gallery,show_leaderboard=excluded.show_leaderboard,cover_photo_url=excluded.cover_photo_url,gallery_json=excluded.gallery_json,updated_at=excluded.updated_at`)
+      .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),slug,logoDataUrl||null,brandColor||null,themePreset,tagline||null,missionQuote||null,missionAuthor||null,showStats,showGallery,showLeaderboard,coverPhotoUrl||null,galleryJson,organization?.status||'pending',organization?.created_at||now,now).run()
     // P1-20: `organization` here is whatever resolveOrganizationAccess found
     // BEFORE this insert/upsert ran, so `!organization` means this call just
     // created the org row for the first time (as opposed to an existing
@@ -135,10 +159,28 @@ export async function POST(request){
     return Response.json({ok:true,slug})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})
-  if(['saveEvent','draftEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition'].includes(action)&&!canManageOrg(role))
+  if(['saveEvent','draftEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition','uploadOrgImage'].includes(action)&&!canManageOrg(role))
     return Response.json({error:'You do not have permission to do that.'},{status:403})
   if(['inviteAdmin','updateAdminRole','removeAdmin'].includes(action)&&role!=='owner')
     return Response.json({error:'Only the organization owner can manage admins.'},{status:403})
+  // P2-01: uploads a cover photo or gallery photo to R2 and hands back the
+  // URL app/api/org-images/route.js will serve it from - this action never
+  // touches the organizations row itself (see saveOrganization above), the
+  // client folds the returned URL into its normal Save like any other
+  // field. Kept separate from saveOrganization because these are real
+  // files, not JSON - unlike the logo, which is small enough to travel as a
+  // base64 field on the same save.
+  if(action==='uploadOrgImage'){
+    const purpose=body.purpose==='gallery'?'gallery':body.purpose==='cover'?'cover':null
+    if(!purpose)return Response.json({error:'Unknown photo type.'},{status:400})
+    const parsed=parseDataUrlImage(body.dataUrl)
+    if(!parsed)return Response.json({error:'Choose a valid image under 6MB.'},{status:400})
+    const ext=extensionForMime(parsed.mime)
+    if(!ext)return Response.json({error:'Please use a PNG, JPEG, WebP or GIF image.'},{status:400})
+    const key=buildOrgImageKey(organization.id,purpose,ext,crypto.randomUUID())
+    await env.ORG_IMAGES.put(key,parsed.bytes,{httpMetadata:{contentType:parsed.mime}})
+    return Response.json({ok:true,url:`/api/org-images?key=${encodeURIComponent(key)}`})
+  }
   if(action==='draftEvent'){
     // P2-02: pre-fills the client-side "Add an event" form from a sentence
     // the organizer types - never inserted into the database directly, so
