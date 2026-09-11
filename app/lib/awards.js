@@ -21,3 +21,25 @@ export function rankStandings(entries, tiers) {
     .map(entry => ({ ...entry, tier: tierForHours(entry.hours, tiers)?.name || null }))
     .sort((a, b) => Number(b.hours) - Number(a.hours))
 }
+
+// P1-11: the public organization page shows competition standings to
+// anyone, unauthenticated - including for orgs whose volunteers are minors.
+// Full names are fine on the organizer's own (logged-in, org-scoped) Awards
+// tab, but not appropriate to publish. This reduces a display name to
+// "First L." the same way many youth platforms label public leaderboards.
+// A single-word name (or no name on file) is returned as-is / generically.
+export function publicLabel(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return 'A Niyyah volunteer'
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`
+}
+
+// P1-11: whether a competition's date window (start_date/end_date, both
+// plain YYYY-MM-DD strings - see the naive-date convention in
+// app/lib/recurrence.js) includes "today". Used to decide which
+// competitions surface on the public org page: only the currently-running
+// ones, not the organizer's full past/upcoming history.
+export function isCompetitionActive(competition, today) {
+  return String(competition.startDate) <= today && today <= String(competition.endDate)
+}
