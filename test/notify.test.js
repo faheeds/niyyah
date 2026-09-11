@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSignupConfirmation, buildApplicationStatusUpdate, sendSignupConfirmation, sendApplicationStatusUpdate } from '../app/lib/notify.js'
+import { buildSignupConfirmation, buildApplicationStatusUpdate, buildEventReminder, sendSignupConfirmation, sendApplicationStatusUpdate, sendEventReminder } from '../app/lib/notify.js'
 
 test('buildSignupConfirmation includes event, org, date and venue', () => {
   const { subject, text } = buildSignupConfirmation({
@@ -45,4 +45,27 @@ test('sendSignupConfirmation no-ops without throwing when no email provider is c
 test('sendApplicationStatusUpdate no-ops for shortlisted without calling out to email at all', async () => {
   const result = await sendApplicationStatusUpdate({ to: 'volunteer@example.com', eventTitle: 'x', organizationName: 'y', status: 'shortlisted' })
   assert.deepEqual(result, { sent: false, reason: 'not_notifiable' })
+})
+
+test('buildEventReminder includes event, org, time and venue', () => {
+  const { subject, text } = buildEventReminder({
+    name: 'Amina', eventTitle: 'Food Pantry', organizationName: 'Islamic Center of Eastside',
+    startAt: '2026-09-20T10:00', locationName: 'Community Hall',
+  })
+  assert.equal(subject, 'Starting soon: Food Pantry')
+  assert.match(text, /Hi Amina,/)
+  assert.match(text, /"Food Pantry" with Islamic Center of Eastside is starting soon/)
+  assert.match(text, /Sunday, September 20 at 10:00 AM/)
+  assert.match(text, /at Community Hall/)
+})
+
+test('buildEventReminder falls back gracefully with no name or venue', () => {
+  const { text } = buildEventReminder({ eventTitle: 'Cleanup', organizationName: 'Masjid Team', startAt: 'not-a-date', locationName: '' })
+  assert.match(text, /Hi there,/)
+  assert.match(text, /"Cleanup" with Masjid Team is starting soon\.\n/) // no " - ", no " at "
+})
+
+test('sendEventReminder no-ops without throwing when no email provider is configured', async () => {
+  const result = await sendEventReminder({ to: 'volunteer@example.com', eventTitle: 'Cleanup', organizationName: 'Org', startAt: '2026-09-20T10:00', locationName: 'Park' })
+  assert.equal(result.sent, false)
 })

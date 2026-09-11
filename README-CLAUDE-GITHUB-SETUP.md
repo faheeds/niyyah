@@ -99,7 +99,21 @@ P1-01: confirmation emails when someone signs up for an event or volunteering op
    - `RESEND_FROM_ADDRESS` is optional and can be a plain variable (e.g. `Niyyah <notifications@yourdomain.org>`) — without it, sends use `Niyyah <notifications@niyyah.app>`, which will fail at Resend unless that address's domain is one you've verified there. Set this once you have a verified sending domain.
 3. That's it — until `RESEND_API_KEY` is set, sign-ups and application reviews keep working exactly as before, just without the email (`app/lib/notify.js` logs and no-ops instead of erroring).
 
-Event reminders ("a reminder before an event", the third piece of P1-01) need a scheduled job, not just a request-time send, so they're intentionally out of scope here — see the `p1-01b-event-reminders` backlog item for that follow-up.
+Event reminders ("a reminder before an event", the third piece of P1-01) needed a scheduled job, not just a request-time send — see section 6b below for that.
+
+## 6b. Event reminder emails (P1-01b — needs 6a done first)
+
+A reminder email shortly before an event starts. This can't be a request-time send like the confirmation/status-change emails in 6a — nothing requests anything when an event is merely about to start — so it runs on a Cloudflare Cron Trigger instead, in its own small Worker (`workers/reminders/`) deployed alongside the main one. `.github/workflows/deploy-staging.yml` and `deploy-production.yml` already deploy it automatically; this section is the one-time Cloudflare setup it needs, same idea as 6a but repeated for this Worker's own name.
+
+1. **Set the same Resend secret on this Worker too** — it has its own name (`niyyah-community-reminders-staging` / `niyyah-community-reminders` once deployed once), so it does not inherit the main Worker's secrets:
+   ```bash
+   npx wrangler secret put RESEND_API_KEY --name niyyah-community-reminders-staging
+   npx wrangler secret put RESEND_API_KEY --name niyyah-community-reminders
+   ```
+   Add `RESEND_FROM_ADDRESS` the same way (or as a plain Variable) if you set one for the main Worker in 6a — keep both Workers sending from the same address.
+2. That's it — no separate D1 database or extra dashboard setup; `workers/reminders/wrangler.toml` points at the same database as the main Worker (patched with the same `CLOUDFLARE_D1_DATABASE_ID_STAGING`/`_PRODUCTION` secrets from section 5) and the schema change it needs (`event_signup_slots.reminder_sent_at`) self-creates the same way as everything else in `db/index.js`.
+3. Until `RESEND_API_KEY` is set on this Worker specifically, its Cron Trigger still runs every 15 minutes and still marks slots as reminded (so nothing double-sends once you do set it up) — it just logs and no-ops on the send itself, exactly like the main Worker does before 6a is done.
+4. To confirm it's actually running: Cloudflare dashboard → Workers & Pages → `niyyah-community-reminders-staging` → Logs (or Metrics → Cron Triggers), after waiting up to 15 minutes.
 
 ## 7. Bootstrapping the first admin account
 

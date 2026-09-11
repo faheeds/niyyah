@@ -53,3 +53,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Deploy the event-reminders Worker (P1-01b)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          sed -i "s/__WORKER_NAME__/niyyah-community-reminders/; s/__D1_DATABASE_ID__/${{ secrets.CLOUDFLARE_D1_DATABASE_ID_PRODUCTION }}/" workers/reminders/wrangler.toml
+          npx wrangler deploy --config workers/reminders/wrangler.toml

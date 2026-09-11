@@ -263,6 +263,7 @@ export async function prepareCommunityTables() {
       user_id TEXT NOT NULL,
       selected_date TEXT NOT NULL,
       selected_time TEXT NOT NULL,
+      reminder_sent_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(event_id,user_id)
@@ -369,6 +370,22 @@ export async function prepareCommunityTables() {
     }
   }
   await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug)').run()
+  // event_signup_slots predates reminder_sent_at (added for P1-01b - the
+  // Cron Trigger Worker in workers/reminders/ stamps this the moment it
+  // sends a reminder, so a slot is never reminded twice even though the
+  // Worker's due-for-a-reminder window overlaps between consecutive ticks -
+  // see app/lib/reminder-window.js). Same tolerate-duplicate-column pattern
+  // as above.
+  try {
+    await db.prepare('ALTER TABLE event_signup_slots ADD COLUMN reminder_sent_at TEXT').run()
+  } catch (e) {
+    if (!String(e).toLowerCase().includes('duplicate column')) throw e
+  }
+  // Partial index: the Worker's due-for-a-reminder query only ever looks at
+  // rows that haven't been reminded yet, so only those need indexing on
+  // (selected_date, selected_time) - the vast majority of rows, once a slot
+  // has been reminded, drop out of this index entirely.
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_signup_slots_due ON event_signup_slots(selected_date,selected_time) WHERE reminder_sent_at IS NULL").run()
   communityTablesReady = true
   return db
 }
