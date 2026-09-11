@@ -2,6 +2,7 @@ import { getUser } from '../../auth.ts'
 import { prepareCommunityTables } from '../../../db/index.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
 import { sendSignupConfirmation } from '../../lib/notify.js'
+import { buildMatchReason } from '../../lib/match-reason.js'
 
 const parse=value=>{try{return JSON.parse(value||'[]')}catch{return[]}}
 const area=postcode=>String(postcode||'').toUpperCase().replace(/\s/g,'').slice(0,3)
@@ -25,7 +26,7 @@ export async function GET(){
   }
   const interests=parse(profile?.interests).map(x=>String(x).toLowerCase()),userArea=area(profile?.postcode)
   const occurrenced=(events.results??[]).map(e=>{const occ=currentOccurrence(e.start_at,e.end_at,e.recurrence);return {...e,start_at:occ.startAt,end_at:occ.endAt}})
-  const ranked=occurrenced.map(e=>{const interestMatch=interests.some(i=>i.includes(String(e.interest).toLowerCase())||String(e.interest).toLowerCase().includes(i.split(' ')[0]));const nearby=!!userArea&&area(e.postcode)===userArea;const friendNames=friendMap[e.id]??[];return {...e,interestMatch,nearby,friendNames,score:(interestMatch?4:0)+(nearby?3:0)+(friendNames.length?2:0)}}).sort((a,b)=>b.score-a.score||String(a.start_at).localeCompare(String(b.start_at)))
+  const ranked=occurrenced.map(e=>{const interestMatch=interests.some(i=>i.includes(String(e.interest).toLowerCase())||String(e.interest).toLowerCase().includes(i.split(' ')[0]));const nearby=!!userArea&&area(e.postcode)===userArea;const friendNames=friendMap[e.id]??[];return {...e,interestMatch,nearby,friendNames,matchReason:buildMatchReason(interestMatch,nearby,friendNames,e.interest),score:(interestMatch?4:0)+(nearby?3:0)+(friendNames.length?2:0)}}).sort((a,b)=>b.score-a.score||String(a.start_at).localeCompare(String(b.start_at)))
   return Response.json({profile:{interests:parse(profile?.interests),postcode:profile?.postcode||''},opportunities:ranked})
 }
 
