@@ -34,6 +34,8 @@ function App() {
 
   useEffect(()=>{fetch('/api/events').then(r=>r.json()).then(({events})=>{if(events?.length){const localEvents=events.map((item,index)=>({id:item.id,letter:item.title.slice(0,1).toUpperCase(),eyebrow:item.summary,title:item.title,place:item.location_name,category:item.interest,distance:item.postcode,date:new Date(item.start_at).toLocaleString([],{weekday:'short',hour:'2-digit',minute:'2-digit'}),tone:['gold','mint','cream'][index%3],ageRange:item.age_range,eventType:item.event_type,compensation:item.compensation_type,payDetails:item.pay_details}));setEventList([...localEvents,...opportunities]);setSelected(localEvents[0])}}).catch(()=>{})},[])
   const visible = useMemo(() => filter === 'All' ? eventList : eventList.filter((item) => item.category === filter), [filter,eventList])
+  const shownCards = useMemo(() => visible.slice(0, 6), [visible])
+  const extraCount = Math.max(0, visible.length - 6)
   const filters=useMemo(()=>['All',...new Set(eventList.map(item=>item.category))],[eventList])
 
   const scrollTo = (id) => {
@@ -84,13 +86,19 @@ function App() {
               {filters.map((item) => <button key={item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item}</button>)}
             </div>
             <div className="cards">
-              {visible.map((item) => (
+              {shownCards.map((item) => (
                 <button key={item.id} className={`event-card ${selected.id === item.id ? 'selected' : ''}`} onClick={() => chooseEvent(item)} aria-pressed={selected.id === item.id}>
                   <span className={`letter ${item.tone}`}>{item.letter}</span>
                   <span className="event-copy"><small>{item.eyebrow}</small><b>{item.title}</b><span>{item.place}{item.ageRange?` · ${item.ageRange}`:''}{item.compensation?` · ${item.compensation==='paid'?item.payDetails||'Paid':'Unpaid'}`:''}</span></span>
                   <ChevronRight size={19} />
                 </button>
               ))}
+              {extraCount > 0 && (
+                <a className="event-card event-card-more" href="/join">
+                  <span className="event-copy"><b>+{extraCount} more {extraCount === 1 ? 'opportunity' : 'opportunities'}</b><span>Sign up to see the full list</span></span>
+                  <ChevronRight size={19} />
+                </a>
+              )}
             </div>
             <div className="selection">
               <div><small>Your pick</small><b>{selected.title}</b><span><MapPin size={13} /> {selected.distance} <CalendarDays size={13} /> {selected.date}</span></div>
