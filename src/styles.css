@@ -222,8 +222,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-loading{display:flex;align-items:center;justify-content:center;gap:10px;min-height:100vh;color:var(--muted)}
 .org-landing-nav{padding:20px max(24px,calc((100vw - 900px)/2))}
 .org-landing-nav a{display:flex;align-items:center;gap:7px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:700}
-.org-landing-hero{background:var(--org-accent);color:#fff;padding:50px max(24px,calc((100vw - 900px)/2)) 44px;text-align:center;display:flex;flex-direction:column;align-items:center}
-.org-landing-logo{width:88px;height:88px;border-radius:24px;object-fit:cover;background:#fff;margin-bottom:18px;box-shadow:0 14px 30px rgba(0,0,0,.18)}
+/* P2-02: the Vibrant preset's flat single-colour fill read flat/dated with
+   no cover photo (the common case). A subtle diagonal gradient off the
+   org's own accent colour adds depth without needing a photo. The plain
+   background:var(--org-accent) stays first as a color-mix()-unsupported
+   fallback - a browser that can't parse the second declaration just keeps
+   the first, it never falls through to no background at all. */
+.org-landing-hero{background:var(--org-accent);background:linear-gradient(135deg,var(--org-accent),color-mix(in srgb,var(--org-accent) 55%,#000 45%));color:#fff;padding:50px max(24px,calc((100vw - 900px)/2)) 44px;text-align:center;display:flex;flex-direction:column;align-items:center}
+/* P2-02: object-fit:contain (was cover) + a little padding so a wide/
+   non-square logo is shown in full rather than cropped at the sides -
+   cover was slicing real logos in half on the live site. */
+.org-landing-logo{width:88px;height:88px;border-radius:24px;object-fit:contain;padding:10px;box-sizing:border-box;background:#fff;margin-bottom:18px;box-shadow:0 14px 30px rgba(0,0,0,.18)}
 .org-landing-logo-fallback{width:88px;height:88px;border-radius:24px;background:rgba(255,255,255,.16);display:grid;place-items:center;font:800 34px 'Manrope';margin-bottom:18px}
 .org-landing-hero h1{font:800 clamp(32px,5vw,48px)/1.05 'Manrope';letter-spacing:-1.5px;margin:0 0 12px;max-width:720px}
 .org-landing-hero>p{max-width:600px;opacity:.92;line-height:1.6;margin:0}
@@ -237,7 +246,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-stats div{text-align:center}
 .org-landing-stats b{display:block;font:800 26px 'Manrope';font-variant-numeric:tabular-nums}
 .org-landing-stats small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.8;margin-top:2px}
-.org-landing-stats-section{max-width:1000px;margin:0 auto;padding:32px max(24px,calc((100vw - 1000px)/2)) 0}
+/* P2-02: fixing a real bug reported live - this (and .org-landing-gallery/
+   -leaderboard/-events below) used to ALSO carry max-width:1000px;margin:0
+   auto, stacked on top of this same viewport-centering padding formula.
+   Centering twice shrank the inner content width toward zero on any
+   screen wider than ~1048px, collapsing these sections into an
+   unreadable single-word-per-line column. The padding formula alone
+   already centers a 1000px column against the real viewport - same
+   pattern as .org-landing-nav/.org-landing-hero above, which never had
+   this bug - so the redundant max-width/margin:auto is simply removed. */
+.org-landing-stats-section{padding:32px max(24px,calc((100vw - 1000px)/2)) 0}
 .org-landing-stats-section .org-landing-stats{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;justify-content:space-around;color:var(--ink)}
 .org-landing-stats-section .org-landing-stats b{color:var(--org-accent)}
 .org-landing-stats-section .org-landing-stats small{color:var(--muted);opacity:1}
@@ -250,7 +268,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .theme-warm.has-cover{background-color:#2a1d13}
 .theme-warm::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,20,16,0) 30%,rgba(15,15,12,.82) 100%)}
 .theme-warm .org-landing-hero-inner{position:relative;z-index:1;padding:36px max(24px,calc((100vw - 900px)/2)) 40px;width:100%}
-.theme-warm .org-landing-logo,.theme-warm .org-landing-logo-fallback{width:60px;height:60px;border-radius:16px;margin-bottom:14px}
+.theme-warm .org-landing-logo,.theme-warm .org-landing-logo-fallback{width:60px;height:60px;border-radius:16px;margin-bottom:14px;padding:6px;box-sizing:border-box}
 .theme-warm h1{text-align:left;margin:0 0 6px}
 .theme-warm .org-landing-meta{justify-content:flex-start}
 
@@ -266,7 +284,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .theme-minimal .org-landing-meta a,.theme-minimal .org-landing-meta span{background:var(--mint);color:var(--green-strong)}
 .theme-minimal .org-landing-hero-art{position:relative;min-height:360px;height:100%;background:linear-gradient(150deg,var(--mint),var(--org-accent) 140%);background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:20px}
 .theme-minimal .org-landing-hero-art.has-cover{background-color:var(--mint)}
-.theme-minimal .org-landing-hero-art .org-landing-logo,.theme-minimal .org-landing-hero-art .org-landing-logo-fallback{width:52px;height:52px;border-radius:14px;margin:0;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+.theme-minimal .org-landing-hero-art .org-landing-logo,.theme-minimal .org-landing-hero-art .org-landing-logo-fallback{width:52px;height:52px;border-radius:14px;margin:0;padding:6px;box-sizing:border-box;box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .theme-minimal .org-landing-art-stat{margin-left:auto;background:var(--surface);border-radius:12px;padding:10px 14px;box-shadow:0 12px 26px -10px rgba(0,0,0,.35)}
 .theme-minimal .org-landing-art-stat b{display:block;font:800 20px 'Manrope';color:var(--org-accent);font-variant-numeric:tabular-nums}
 .theme-minimal .org-landing-art-stat small{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
@@ -277,7 +295,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-quote blockquote p{margin:0;font:600 italic 19px/1.55 'Manrope';color:var(--ink)}
 .org-landing-quote cite{display:block;margin-top:8px;font-style:normal;color:var(--muted);font-size:12px}
 
-.org-landing-gallery{max-width:1000px;margin:36px auto 0;padding:0 max(24px,calc((100vw - 1000px)/2))}
+/* P2-02: same double-centering bug fix as .org-landing-stats-section above. */
+.org-landing-gallery{margin:36px 0 0;padding:0 max(24px,calc((100vw - 1000px)/2))}
 .org-landing-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .org-landing-gallery-grid img{width:100%;aspect-ratio:1.1/1;object-fit:cover;border-radius:14px;border:1px solid var(--line)}
 
@@ -287,7 +306,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 /* P1-17: the pending-review state - same shell as org-landing-notfound,
    distinguished by a small status badge rather than a whole new layout. */
 .org-landing-pending-badge{display:inline-flex;align-items:center;gap:6px;background:var(--mint);color:var(--green-strong);border-radius:99px;padding:7px 14px;font-size:11px;font-weight:800;margin-bottom:16px}
-.org-landing-leaderboard{max-width:1000px;margin:0 auto;padding:44px max(24px,calc((100vw - 1000px)/2)) 0}
+/* P2-02: same double-centering bug fix as .org-landing-stats-section above. */
+.org-landing-leaderboard{padding:44px max(24px,calc((100vw - 1000px)/2)) 0}
 .org-landing-leaderboard h2{display:flex;align-items:center;gap:9px;font:800 26px 'Manrope';margin:0 0 20px;color:var(--ink)}
 .org-landing-leaderboard h2 svg{color:#b07717}
 .org-landing-competition{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:14px}
@@ -297,7 +317,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .org-landing-competition-head span{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
 .org-landing-competition>p{color:var(--muted);font-size:12px;margin:0 0 12px}
 .org-landing-competition .tier-badges{margin-bottom:12px}
-.org-landing-events{max-width:1000px;margin:0 auto;padding:44px max(24px,calc((100vw - 1000px)/2)) 70px}
+/* P2-02: same double-centering bug fix as .org-landing-stats-section above. */
+.org-landing-events{padding:44px max(24px,calc((100vw - 1000px)/2)) 70px}
 .org-landing-events h2{font:800 26px 'Manrope';margin:0 0 20px;color:var(--ink)}
 .org-landing-event-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .org-landing-event{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:6px}
