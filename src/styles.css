@@ -54,6 +54,12 @@ h1 em:after { content:""; position:absolute; height:3px; background:#db9613; bor
 .cards { display:grid; gap:8px; }
 .event-card { width:100%; display:flex; align-items:center; text-align:left; border:1px solid #d7dfd5; background:#fffdf8; border-radius:19px; padding:12px; cursor:pointer; transition:.2s ease; }
 .event-card:hover { transform:translateY(-2px); box-shadow:0 8px 16px #173f3420; }
+/* P2-04: the homepage picker's overflow CTA - a dashed, accent-tinted
+   variant of .event-card so it reads as "see more" rather than another
+   real listing. */
+.event-card-more { border-style:dashed; background:#f7fbf7; justify-content:space-between; text-decoration:none; }
+.event-card-more .event-copy b { color:var(--green-strong); }
+.event-card-more .event-copy span { color:var(--muted); }
 .event-card.selected { background:var(--green); border-color:var(--green); color:#fff; }
 .letter { flex:0 0 44px; height:44px; display:grid; place-items:center; border-radius:13px; color:#fff; font-weight:800; font-size:18px; }.letter.gold{background:#e4a421}.letter.mint{background:#deeee8;color:#277a65}.letter.cream{background:#f6e7bd;color:#ba7d18}
 .event-copy { flex:1; display:block; margin-left:12px; min-width:0; }.event-copy small,.event-copy b,.event-copy span{display:block}.event-copy small{color:#b57d1d;text-transform:uppercase;letter-spacing:1px;font-size:9px;font-weight:800}.event-copy b{font:700 14px 'Manrope';margin:4px 0}.event-copy span{font-size:10px;color:#7c8589}.selected .event-copy span{color:#cadbd5}.selected .event-copy small{color:#ffd16d}
