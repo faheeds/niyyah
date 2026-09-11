@@ -4,6 +4,7 @@ import { resolveOrganizationAccess } from '../../org-admins.js'
 import { currentOccurrence } from '../../lib/recurrence.js'
 import { moderationIssue } from '../../lib/content-filter.js'
 import { sendApplicationStatusUpdate } from '../../lib/notify.js'
+import { slugify } from '../../lib/org-slug.js'
 import { rankStandings } from '../../lib/awards.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
@@ -12,6 +13,19 @@ const requiredOrganization=['name','organizationType','email','phone','address',
 // domain list; staff is limited to roster/hours approval (see the action
 // gates in POST below). Admin management itself is owner-only.
 const canManageOrg=role=>role==='owner'||role==='admin'
+// P1-10: a stable slug for an organization's public landing page link
+// (app/api/org-profile/route.js) - generated once from the org's name the
+// first time it saves a profile, and never touched again afterward (see the
+// saveOrganization action) so a link an organization has already shared
+// never breaks, even if they rename later.
+const nextAvailableSlug=async(db,desired)=>{
+  let candidate=desired,suffix=2
+  while(await db.prepare('SELECT 1 FROM organizations WHERE slug=?').bind(candidate).first()){
+    candidate=`${desired}-${suffix}`; suffix+=1
+  }
+  return candidate
+}
+const HEX_COLOR=/^#[0-9a-f]{6}$/i
 
 export async function GET(){
   const user=await getUser(); if(!user)return Response.json({error:'Sign in required.'},{status:401})
@@ -90,14 +104,24 @@ export async function POST(request){
     if(requiredOrganization.some(key=>!clean(body[key],key==='description'?800:160)))return Response.json({error:'Complete all required organization details.'},{status:400})
     const orgContentIssue=moderationIssue(body.name)||moderationIssue(body.description)||moderationIssue(body.safeguardingName)
     if(orgContentIssue)return Response.json({error:orgContentIssue},{status:400})
+    // P1-10: logo/brand color are optional and editable on every save.
+    // logoDataUrl is a client-resized data: URL (see organizer-client.jsx) -
+    // capped well under D1's row-size limit since it's the only large field
+    // on this row. brandColor is a plain #rrggbb hex string.
+    const logoDataUrl=typeof body.logoDataUrl==='string'?body.logoDataUrl:''
+    if(logoDataUrl&&(!logoDataUrl.startsWith('data:image/')||logoDataUrl.length>350000))
+      return Response.json({error:'Choose a smaller logo image.'},{status:400})
+    const brandColor=clean(body.brandColor,7)
+    if(brandColor&&!HEX_COLOR.test(brandColor))return Response.json({error:'Brand color must be a hex code like #174C3D.'},{status:400})
     const id=organization?.id||crypto.randomUUID()
     // Edit stays tied to whoever actually created the organization, even
     // when an admin (not the owner) is the one saving the form.
     const ownerUserId=organization?.owner_user_id||user.userId
-    await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,status,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,updated_at=excluded.updated_at`)
-      .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),organization?.status||'pending',organization?.created_at||now,now).run()
-    return Response.json({ok:true})
+    const slug=organization?.slug||await nextAvailableSlug(db,slugify(body.name))
+    await db.prepare(`INSERT INTO organizations (id,owner_user_id,name,organization_type,registration_number,email,phone,website,address,postcode,description,safeguarding_name,safeguarding_email,slug,logo_data_url,brand_color,status,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO UPDATE SET name=excluded.name,organization_type=excluded.organization_type,registration_number=excluded.registration_number,email=excluded.email,phone=excluded.phone,website=excluded.website,address=excluded.address,postcode=excluded.postcode,description=excluded.description,safeguarding_name=excluded.safeguarding_name,safeguarding_email=excluded.safeguarding_email,logo_data_url=excluded.logo_data_url,brand_color=excluded.brand_color,updated_at=excluded.updated_at`)
+      .bind(id,ownerUserId,clean(body.name,160),clean(body.organizationType,80),clean(body.registrationNumber,80)||null,clean(body.email,160),clean(body.phone,40),clean(body.website,200)||null,clean(body.address,240),clean(body.postcode,20),clean(body.description,800),clean(body.safeguardingName,120),clean(body.safeguardingEmail,160),slug,logoDataUrl||null,brandColor||null,organization?.status||'pending',organization?.created_at||now,now).run()
+    return Response.json({ok:true,slug})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})
   if(['saveEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition'].includes(action)&&!canManageOrg(role))
