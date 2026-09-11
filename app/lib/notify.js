@@ -106,3 +106,27 @@ export function sendApplicationStatusUpdate({ to, ...rest }) {
   if (!message) return Promise.resolve({ sent: false, reason: 'not_notifiable' })
   return sendEmail({ to, ...message })
 }
+
+// P1-01b: sent shortly before an event/opportunity starts, from the
+// separate workers/reminders Cron Trigger Worker rather than a request
+// handler like the two messages above - the main app's Worker only exports
+// a fetch handler (see README-CLAUDE-GITHUB-SETUP.md section 6b), so a
+// timer-driven send needs its own Worker. That Worker decides *who* is due
+// for a reminder (app/lib/reminder-window.js); this is only the message.
+export function buildEventReminder({ name, eventTitle, organizationName, startAt, locationName }) {
+  const when = formatWhen(startAt)
+  const subject = `Starting soon: ${eventTitle}`
+  const text = [
+    `Hi ${name || 'there'},`,
+    '',
+    `"${eventTitle}" with ${organizationName} is starting soon${when ? ` — ${when}` : ''}${locationName ? ` at ${locationName}` : ''}.`,
+    '',
+    'See you there!',
+    '',
+    '— Niyyah',
+  ].join('\n')
+  return { subject, text }
+}
+export function sendEventReminder({ to, ...rest }) {
+  return sendEmail({ to, ...buildEventReminder(rest) })
+}

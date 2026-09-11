@@ -1,0 +1,22 @@
+# P1-01b: a small, separate Worker whose only job is the Cron Trigger below -
+# see worker.js's header comment for why this isn't part of the main app's
+# Worker. Deployed alongside the main Worker by
+# .github/workflows/deploy-staging.yml / deploy-production.yml, which patch
+# __WORKER_NAME__ and __D1_DATABASE_ID__ in place before `wrangler deploy`
+# (same pattern as scripts/patch-wrangler-config.mjs for the main app's
+# generated config - this one is hand-written instead of generated, since
+# this Worker has no vite/vinext build step).
+name = "__WORKER_NAME__"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Every 15 minutes - see app/lib/reminder-window.js for why that cadence
+# pairs with a 60-minute due-for-a-reminder window.
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "niyyah-community-d1"
+database_id = "__D1_DATABASE_ID__"
