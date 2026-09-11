@@ -196,3 +196,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .membership-list article{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #dbe2db;border-radius:13px;padding:10px 12px}
 .membership-list b{font-size:12px}
 .membership-list span{font-size:9px;color:#7d8986;text-transform:capitalize}
+/* P2-02: the "Draft with AI" quick-fill row above the Add an event form. */
+.ai-draft-row{display:flex;gap:8px;margin:-4px 0 14px;flex-wrap:wrap}
+.ai-draft-row input{flex:1 1 220px;border:1px solid #ccd8cf;background:#faf9f4;border-radius:11px;padding:11px 12px;color:var(--ink);font:500 12px 'DM Sans';outline:0}
+.ai-draft-row .secondary-action{display:flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto}
