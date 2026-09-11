@@ -6,6 +6,7 @@ import { moderationIssue } from '../../lib/content-filter.js'
 import { sendApplicationStatusUpdate } from '../../lib/notify.js'
 import { slugify } from '../../lib/org-slug.js'
 import { rankStandings } from '../../lib/awards.js'
+import { draftEvent } from '../../lib/ai-draft.js'
 
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):''
 const requiredOrganization=['name','organizationType','email','phone','address','postcode','description','safeguardingName','safeguardingEmail']
@@ -124,10 +125,28 @@ export async function POST(request){
     return Response.json({ok:true,slug})
   }
   if(!organization)return Response.json({error:'Create your organization profile first.'},{status:403})
-  if(['saveEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition'].includes(action)&&!canManageOrg(role))
+  if(['saveEvent','draftEvent','closeEvent','deleteEvent','reviewApplication','addEmailDomain','removeEmailDomain','saveCompetition','deleteCompetition'].includes(action)&&!canManageOrg(role))
     return Response.json({error:'You do not have permission to do that.'},{status:403})
   if(['inviteAdmin','updateAdminRole','removeAdmin'].includes(action)&&role!=='owner')
     return Response.json({error:'Only the organization owner can manage admins.'},{status:403})
+  if(action==='draftEvent'){
+    // P2-02: pre-fills the client-side "Add an event" form from a sentence
+    // the organizer types - never inserted into the database directly, so
+    // this deliberately skips the fuller validation saveEvent below does
+    // (no address/date checks needed here) but still runs the same
+    // profanity check on the organizer's own free text before it's sent
+    // anywhere external.
+    const text=clean(body.text,500)
+    if(!text)return Response.json({error:'Describe the event in a sentence first.'},{status:400})
+    const textIssue=moderationIssue(text)
+    if(textIssue)return Response.json({error:textIssue},{status:400})
+    const result=await draftEvent(text)
+    if(!result.ok){
+      if(result.reason==='not_configured')return Response.json({error:'AI drafting is not set up yet - ask an admin to add the ANTHROPIC_API_KEY secret.'},{status:503})
+      return Response.json({error:'Could not draft that right now - try rephrasing, or fill in the form by hand.'},{status:502})
+    }
+    return Response.json({ok:true,draft:result.draft})
+  }
   if(action==='saveEvent'){
     const fields=['title','summary','interest','ageRange','locationName','address','postcode','startAt','endAt']
     const labels={title:'event name',summary:'description',interest:'interest',ageRange:'age range',locationName:'venue',address:'address',postcode:'zip code',startAt:'start date and time',endAt:'end date and time'},missing=fields.filter(key=>!clean(body[key],key==='summary'?600:200))

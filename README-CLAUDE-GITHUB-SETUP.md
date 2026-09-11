@@ -115,6 +115,16 @@ A reminder email shortly before an event starts. This can't be a request-time se
 3. Until `RESEND_API_KEY` is set on this Worker specifically, its Cron Trigger still runs every 15 minutes and still marks slots as reminded (so nothing double-sends once you do set it up) — it just logs and no-ops on the send itself, exactly like the main Worker does before 6a is done.
 4. To confirm it's actually running: Cloudflare dashboard → Workers & Pages → `niyyah-community-reminders-staging` → Logs (or Metrics → Cron Triggers), after waiting up to 15 minutes.
 
+## 6c. AI event drafting (optional — everything else works without it)
+
+P2-02: on the organizer's "Add an event" form, a "Draft with AI" box that turns one typed sentence ("Food pantry every Friday at 5pm") into a first pass at the title, description, interest, age range, type, and (for volunteering) a volunteers-needed guess — never the address, venue, zip code, or exact date/time, which the organizer always fills in themselves. Uses the Anthropic API (`app/lib/ai-draft.js`) directly via `fetch`, the same request-time-`env` pattern as Resend in 6a.
+
+1. **Get an API key** from [console.anthropic.com](https://console.anthropic.com) (Settings → API Keys) — use a key on a plan billed to the org, not a personal subscription, since every organizer's draft request uses it.
+2. **Add it to Cloudflare**, not GitHub Actions — same pattern as Google sign-in and Resend above, the Worker reads it at request time via `env`, not at build time:
+   - `ANTHROPIC_API_KEY` must be encrypted: `npx wrangler secret put ANTHROPIC_API_KEY --name niyyah-community-staging` (repeat with `--name niyyah-community` for production), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
+   - `ANTHROPIC_MODEL` is optional and can be a plain variable — only needed if the model name hardcoded in `app/lib/ai-draft.js` (`claude-3-5-haiku-20241022` as of this writing) has since been retired; check [the current model list](https://docs.claude.com/en/docs/about-claude/models) if drafting starts failing.
+3. That's it — until `ANTHROPIC_API_KEY` is set, the "Draft with AI" box tells the organizer it isn't set up yet instead of erroring, and filling in the form by hand keeps working exactly as before.
+
 ## 7. Bootstrapping the first admin account
 
 `/admin` (approving organizations) is gated on `app/admin-emails.js` — `ADMIN_EMAILS.includes(user.email)`, nothing else. Both public sign-up routes refuse to register any address on that list (so nobody can squat it with a password account), which means the admin account itself can't be created through the normal `/signup` or `/signin` forms either. Create it directly in D1 once, right after your first deploy:
