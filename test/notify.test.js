@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSignupConfirmation, buildApplicationStatusUpdate, buildEventReminder, sendSignupConfirmation, sendApplicationStatusUpdate, sendEventReminder } from '../app/lib/notify.js'
+import { buildSignupConfirmation, buildApplicationStatusUpdate, buildEventReminder, buildNewOrgPendingReview, sendSignupConfirmation, sendApplicationStatusUpdate, sendEventReminder, sendNewOrgApprovalRequest } from '../app/lib/notify.js'
 
 test('buildSignupConfirmation includes event, org, date and venue', () => {
   const { subject, text } = buildSignupConfirmation({
@@ -67,5 +67,28 @@ test('buildEventReminder falls back gracefully with no name or venue', () => {
 
 test('sendEventReminder no-ops without throwing when no email provider is configured', async () => {
   const result = await sendEventReminder({ to: 'volunteer@example.com', eventTitle: 'Cleanup', organizationName: 'Org', startAt: '2026-09-20T10:00', locationName: 'Park' })
+  assert.equal(result.sent, false)
+})
+
+test('buildNewOrgPendingReview includes the org name and who signed up', () => {
+  const { subject, text } = buildNewOrgPendingReview({ organizationName: 'Medina Cares', organizerEmail: 'organizer@example.com' })
+  assert.equal(subject, 'New organization awaiting review: Medina Cares')
+  assert.match(text, /Organization: Medina Cares/)
+  assert.match(text, /Signed up by: organizer@example\.com/)
+  assert.match(text, /\/admin/)
+})
+
+test('buildNewOrgPendingReview falls back gracefully with no organizer email', () => {
+  const { text } = buildNewOrgPendingReview({ organizationName: 'Masjid Team' })
+  assert.match(text, /Signed up by: unknown/)
+})
+
+test('sendNewOrgApprovalRequest no-ops without throwing when no email provider is configured', async () => {
+  const result = await sendNewOrgApprovalRequest({ to: ['admin@example.com'], organizationName: 'Org', organizerEmail: 'owner@example.com' })
+  assert.equal(result.sent, false)
+})
+
+test('sendNewOrgApprovalRequest accepts multiple admin recipients without throwing', async () => {
+  const result = await sendNewOrgApprovalRequest({ to: ['admin1@example.com', 'admin2@example.com'], organizationName: 'Org', organizerEmail: 'owner@example.com' })
   assert.equal(result.sent, false)
 })
