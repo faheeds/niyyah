@@ -1,4 +1,9 @@
-import { ArrowLeft,ArrowRight,Building2,HeartHandshake,LogIn,Sparkles,UserPlus } from 'lucide-react'
-import '../../src/styles.css'
+import { redirect } from 'next/navigation'
 
-export default function OrganizerAccess(){return <main className="access-shell organization-access"><header className="signup-nav"><a className="brand" href="/"><span className="brand-mark"><HeartHandshake size={21}/></span><span><b>Niyyah</b><small>Organizer access</small></span></a><a className="back-home" href="/join"><ArrowLeft size={16}/> Change journey</a></header><section className="access-card"><span className="join-path-icon"><Building2/></span><span className="signup-kicker"><Sparkles size={14}/> Organization journey</span><h1>Welcome, organizer.</h1><p>Log in to manage an existing organization, or sign up to create your organization profile. Both paths finish in the organizer workspace.</p><div className="access-actions"><a className="primary" href="/signin?return_to=/organizer"><LogIn size={17}/> Organizer login</a><a className="secondary-action" href="/signin?mode=signup&return_to=/organizer"><UserPlus size={17}/> Organizer sign up <ArrowRight size={15}/></a></div><small>New organizers will complete their organization profile after signing in.</small></section></main>}
+// The volunteer/organizer choice and the login/signup choice both now live
+// on one page (app/join/page.jsx) so Google sign-in is reachable in a single
+// click instead of three. This route is kept only so old bookmarks and
+// external links to /organizer-access still land somewhere sensible.
+export default function OrganizerAccess() {
+  redirect('/join?role=organizer')
+}
