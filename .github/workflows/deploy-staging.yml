@@ -6,6 +6,17 @@ name: Deploy (staging)
 # in the real staging Worker name and D1 database id before deploying.
 # See README-CLAUDE-GITHUB-SETUP.md for the one-time Cloudflare setup this
 # depends on.
+#
+# The Worker name below ("niyyah") must match whatever the Worker is
+# actually named in the Cloudflare dashboard, not the D1 database name
+# (which is "niyyah-community-staging" and is a separate resource - see
+# the [[d1_databases]] binding, not this name). They drifted once before:
+# this Worker was originally deployed as "niyyah-community-staging" and
+# later renamed to "niyyah" in the dashboard without this file being
+# updated, which meant every future `wrangler deploy` here was one step
+# from silently creating a new, disconnected Worker instead of updating
+# the live one. If the Worker is ever renamed again, update this line to
+# match.
 
 on:
   push:
@@ -43,7 +54,7 @@ jobs:
         run: pnpm build
 
       - name: Patch Worker config for staging
-        run: node scripts/patch-wrangler-config.mjs "niyyah-community-staging" "${{ secrets.CLOUDFLARE_D1_DATABASE_ID_STAGING }}"
+        run: node scripts/patch-wrangler-config.mjs "niyyah" "${{ secrets.CLOUDFLARE_D1_DATABASE_ID_STAGING }}"
 
       - name: Deploy to Cloudflare Workers
         env:

@@ -62,12 +62,12 @@ The app currently runs `pnpm build` and deploys via the OpenAI Sites hosting ref
    - `CLOUDFLARE_ACCOUNT_ID`
    - `CLOUDFLARE_D1_DATABASE_ID_STAGING`
    - `CLOUDFLARE_D1_DATABASE_ID_PRODUCTION`
-5. That's it — `.github/workflows/deploy-staging.yml` deploys to the `niyyah-community-staging` Worker automatically on every merge to `main`; `.github/workflows/deploy-production.yml` only runs when you manually trigger it (Actions tab → "Deploy (production)" → Run workflow), and requires typing `niyyah-community` to confirm.
+5. That's it — `.github/workflows/deploy-staging.yml` deploys to the `niyyah` Worker automatically on every merge to `main`; `.github/workflows/deploy-production.yml` only runs when you manually trigger it (Actions tab → "Deploy (production)" → Run workflow), and requires typing `niyyah-community` to confirm.
 
 This was verified in this sandbox as far as it can be without your Cloudflare credentials: `pnpm build` was run for real, `scripts/patch-wrangler-config.mjs` was run against its actual output and confirmed to patch the right fields, and `wrangler deploy --config dist/server/wrangler.json --dry-run` succeeded — resolving the D1 binding and the static assets directory correctly. What wasn't and couldn't be tested here is a real authenticated deploy. **Before trusting the CI workflows, do one deploy by hand first:**
 ```bash
 pnpm build
-node scripts/patch-wrangler-config.mjs niyyah-community-staging <your-staging-database-id>
+node scripts/patch-wrangler-config.mjs niyyah <your-staging-database-id>
 npx wrangler deploy --config dist/server/wrangler.json
 ```
 Confirm the app actually works against the fresh D1 database (the schema self-creates on first request via the `prepare*Table*` functions in `db/index.js` — you don't need to run the `drizzle/` migrations separately for the app to function, though they're there for reference/schema history). Once that works, the GitHub Actions versions are doing exactly the same thing.
@@ -80,12 +80,12 @@ The app has its own standalone login (`app/auth.ts`): email+password works immed
    - If prompted, configure the OAuth consent screen first (External, app name "Niyyah", your email as support/developer contact — this doesn't need Google verification for a small number of users, just click through past the "unverified app" testing warnings, or add testers under Audience).
    - Application type: **Web application**.
    - Authorized redirect URIs — add one per environment you deploy:
-     - Staging: `https://niyyah-community-staging.faheed-subhani.workers.dev/api/auth/google/callback`
+     - Staging: `https://niyyah.niyyah.workers.dev/api/auth/google/callback`
      - Production (once you have the URL): `https://<your-production-worker>.workers.dev/api/auth/google/callback`
    - Save. Google shows a **Client ID** and **Client Secret** — copy both.
 2. **Add them to Cloudflare**, not GitHub Actions — the Worker reads them at request time via `env`, not at build time:
    - `GOOGLE_CLIENT_ID` can be a plain (non-secret) variable: Cloudflare dashboard → Workers & Pages → your Worker → Settings → Variables → add `GOOGLE_CLIENT_ID` as text.
-   - `GOOGLE_CLIENT_SECRET` must be encrypted: either the same Variables screen with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah-community-staging` (repeat with `--name niyyah-community` for production once that Worker exists).
+   - `GOOGLE_CLIENT_SECRET` must be encrypted: either the same Variables screen with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah` (repeat with `--name niyyah-community` for production once that Worker exists).
 3. That's it — until these are set, the "Continue with Google" button shows a plain "Google sign-in is not set up yet" message instead of erroring, and email+password sign-in/sign-up keeps working normally.
 
 ## 6a. Email notifications (optional — everything else works without it)
@@ -95,7 +95,7 @@ P1-01: confirmation emails when someone signs up for an event or volunteering op
 1. **Create a Resend account** at [resend.com](https://resend.com) and grab an **API key** from the dashboard (Settings → API Keys → Create API Key).
    - Sending from your own domain needs that domain verified in Resend (Domains → Add Domain, then add the DNS records it shows you). Until you do that, Resend's shared `onboarding@resend.dev` sender works fine for testing.
 2. **Add the key to Cloudflare**, not GitHub Actions — same pattern as Google sign-in above, the Worker reads it at request time via `env`, not at build time:
-   - `RESEND_API_KEY` must be encrypted: `npx wrangler secret put RESEND_API_KEY --name niyyah-community-staging` (repeat with `--name niyyah-community` for production once that Worker exists), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
+   - `RESEND_API_KEY` must be encrypted: `npx wrangler secret put RESEND_API_KEY --name niyyah` (repeat with `--name niyyah-community` for production once that Worker exists), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
    - `RESEND_FROM_ADDRESS` is optional and can be a plain variable (e.g. `Niyyah <notifications@yourdomain.org>`) — without it, sends use `Niyyah <notifications@niyyah.app>`, which will fail at Resend unless that address's domain is one you've verified there. Set this once you have a verified sending domain.
 3. That's it — until `RESEND_API_KEY` is set, sign-ups and application reviews keep working exactly as before, just without the email (`app/lib/notify.js` logs and no-ops instead of erroring).
 
@@ -121,7 +121,7 @@ P2-02: on the organizer's "Add an event" form, a "Draft with AI" box that turns 
 
 1. **Get an API key** from [console.anthropic.com](https://console.anthropic.com) (Settings → API Keys) — use a key on a plan billed to the org, not a personal subscription, since every organizer's draft request uses it.
 2. **Add it to Cloudflare**, not GitHub Actions — same pattern as Google sign-in and Resend above, the Worker reads it at request time via `env`, not at build time:
-   - `ANTHROPIC_API_KEY` must be encrypted: `npx wrangler secret put ANTHROPIC_API_KEY --name niyyah-community-staging` (repeat with `--name niyyah-community` for production), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
+   - `ANTHROPIC_API_KEY` must be encrypted: `npx wrangler secret put ANTHROPIC_API_KEY --name niyyah` (repeat with `--name niyyah-community` for production), or the Cloudflare dashboard's Variables screen with "Encrypt" on.
    - `ANTHROPIC_MODEL` is optional and can be a plain variable — only needed if the model name hardcoded in `app/lib/ai-draft.js` (`claude-3-5-haiku-20241022` as of this writing) has since been retired; check [the current model list](https://docs.claude.com/en/docs/about-claude/models) if drafting starts failing.
 3. That's it — until `ANTHROPIC_API_KEY` is set, the "Draft with AI" box tells the organizer it isn't set up yet instead of erroring, and filling in the form by hand keeps working exactly as before.
 
