@@ -83,10 +83,10 @@ The app has its own standalone login (`app/auth.ts`): email+password works immed
      - Staging: `https://niyyah.niyyah.workers.dev/api/auth/google/callback`
      - Production (once you have the URL): `https://<your-production-worker>.workers.dev/api/auth/google/callback`
    - Save. Google shows a **Client ID** and **Client Secret** — copy both.
-2. **Add them to Cloudflare**, not GitHub Actions — the Worker reads them at request time via `env`, not at build time:
-   - `GOOGLE_CLIENT_ID` can be a plain (non-secret) variable: Cloudflare dashboard → Workers & Pages → your Worker → Settings → Variables → add `GOOGLE_CLIENT_ID` as text.
-   - `GOOGLE_CLIENT_SECRET` must be encrypted: either the same Variables screen with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah` (repeat with `--name niyyah-community` for production once that Worker exists).
-3. That's it — until these are set, the "Continue with Google" button shows a plain "Google sign-in is not set up yet" message instead of erroring, and email+password sign-in/sign-up keeps working normally.
+2. **Set the Client ID in code, the Client Secret in Cloudflare** — these two don't go the same place, and that's deliberate:
+   - `GOOGLE_CLIENT_ID` is not a secret (it's the public identifier visible in every sign-in redirect URL), so it's committed directly as a `vars` entry in `vite.config.js`'s `localBindingConfig`. Edit it there and open a PR — the normal deploy pipeline picks it up. **Do not** add it as a plain Cloudflare dashboard "Variable" instead: `wrangler deploy` replaces a Worker's entire `vars` set with whatever `vite.config.js` defines on every deploy, so a dashboard-only Variable not declared in code gets silently wiped the next time anything deploys. (This actually happened — it broke Google sign-in after the PR #44/#45 deploys on 2026-10-25, with no code change to blame, until we traced it to this.)
+   - `GOOGLE_CLIENT_SECRET` is a real secret and stays out of git. Set it once as a Cloudflare "Secret" binding — Cloudflare dashboard → Workers & Pages → your Worker → Settings → Variables → add `GOOGLE_CLIENT_SECRET` with the "Encrypt" toggle on, or from your machine with `npx wrangler secret put GOOGLE_CLIENT_SECRET --name niyyah` (repeat with `--name niyyah-community` for production once that Worker exists). Unlike plain Variables, Secrets are left alone by `wrangler deploy` and don't need to be in `vite.config.js`.
+3. That's it — until both are set, the "Continue with Google" button shows a plain "Google sign-in is not set up yet" message instead of erroring, and email+password sign-in/sign-up keeps working normally.
 
 ## 6a. Email notifications (optional — everything else works without it)
 

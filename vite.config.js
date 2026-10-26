@@ -8,6 +8,19 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID = '00000000-0000-4000-8000-0000000000
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
   compatibility_flags: ['nodejs_compat'],
+  // Not a secret - this is the public OAuth client id Google issues per app,
+  // visible in every sign-in redirect URL, so it's safe to commit. It has to
+  // live here (as a `vars` entry) rather than only as a Cloudflare dashboard
+  // "Variable": `wrangler deploy` replaces a Worker's entire `vars` set with
+  // whatever this file defines, on every deploy, so a dashboard-only Variable
+  // not declared here gets silently wiped on the next deploy. (This is what
+  // broke Google sign-in after the PR #44/#45 deploys - see the incident note
+  // in README-CLAUDE-GITHUB-SETUP.md.) GOOGLE_CLIENT_SECRET is NOT here - it's
+  // a real secret and stays a Cloudflare "Secret" binding (set once via
+  // `wrangler secret put` or the dashboard), which deploy does not touch.
+  vars: {
+    GOOGLE_CLIENT_ID: '837251838516-6nqjj7jqag8vaaq2it2qvefgi4qlke24.apps.googleusercontent.com',
+  },
   d1_databases: hostingConfig.d1 ? [{
     binding: hostingConfig.d1,
     database_name: 'niyyah-community-d1',
